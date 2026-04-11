@@ -37,3 +37,5 @@ public class AlertKafkaProducer {
         }
     }
 }
+
+//kafka-console-consumer --bootstrap-server kafka:9092 --topic alerts.raw --partition 0 --offset 0
