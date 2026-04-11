@@ -26,6 +26,8 @@ out/
 # VS Code (optional)
 .vscode/
 
+code-coverage/
+
 # Temporary files
 *.swp
 *.swocode-coverage/
