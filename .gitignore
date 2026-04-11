@@ -28,4 +28,4 @@ out/
 
 # Temporary files
 *.swp
-*.swo
+*.swocode-coverage/
