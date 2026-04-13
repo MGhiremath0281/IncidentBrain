@@ -21,42 +21,57 @@ public class CorrelationEngine {
 
     private final IncidentService incidentService;
     private final IncidentProducer producer;
-
     private final Map<String, List<AlertEvent>> windowMap = new ConcurrentHashMap<>();
+
+    private final Map<String, Object> locks = new ConcurrentHashMap<>();
 
     public void process(AlertEvent alert) {
         String service = alert.getServiceName();
 
-        windowMap.computeIfAbsent(service, k -> Collections.synchronizedList(new ArrayList<>())).add(alert);
+        locks.putIfAbsent(service, new Object());
 
-        log.info("[ENGINE] Added alert. service={} current_count={}",
-                service, windowMap.get(service).size());
+        synchronized (locks.get(service)) {
+            windowMap
+                    .computeIfAbsent(service, k -> new ArrayList<>())
+                    .add(alert);
+
+            log.info("[ENGINE] Added alert service={} count={}",
+                    service, windowMap.get(service).size());
+        }
 
         flushIfNeeded(service);
     }
 
     private void flushIfNeeded(String service) {
-        List<AlertEvent> alerts = windowMap.get(service);
 
-        if (alerts == null || alerts.isEmpty()) return;
+        Object lock = locks.get(service);
+        if (lock == null) return;
 
-        synchronized (service.intern()) {
-            if (alerts.size() >= 2 || isWindowExpired(alerts)) {
-                log.info("[ENGINE] Flushing {} alerts for service={}", alerts.size(), service);
+        synchronized (lock) {
 
-                Incident incident = incidentService.createIncident(service, new ArrayList<>(alerts));
+            List<AlertEvent> alerts = windowMap.get(service);
 
-                IncidentEvent event = IncidentEvent.builder()
-                        .id(incident.getId())
-                        .service(service)
-                        .severity(incident.getSeverity())
-                        .alertIds(incident.getAlertIds())
-                        .build();
+            if (alerts == null || alerts.isEmpty()) return;
 
-                producer.publish(event);
-
-                windowMap.remove(service);
+            if (alerts.size() < 2 && !isWindowExpired(alerts)) {
+                return;
             }
+            List<AlertEvent> toProcess = new ArrayList<>(alerts);
+            windowMap.put(service, new ArrayList<>());
+
+            log.info("[ENGINE] Flushing {} alerts for service={}",
+                    toProcess.size(), service);
+
+            Incident incident = incidentService.createIncident(service, toProcess);
+
+            IncidentEvent event = IncidentEvent.builder()
+                    .id(incident.getId())
+                    .service(service)
+                    .severity(incident.getSeverity())
+                    .alertIds(incident.getAlertIds())
+                    .build();
+
+            producer.publish(event);
         }
     }
 
@@ -67,7 +82,10 @@ public class CorrelationEngine {
         LocalDateTime first;
 
         if (rawTimestamp instanceof String) {
-            first = LocalDateTime.parse((String) rawTimestamp, DateTimeFormatter.ISO_DATE_TIME);
+            first = LocalDateTime.parse(
+                    (String) rawTimestamp,
+                    DateTimeFormatter.ISO_DATE_TIME
+            );
         } else {
             first = (LocalDateTime) rawTimestamp;
         }
@@ -78,6 +96,7 @@ public class CorrelationEngine {
     @Scheduled(fixedRate = 60000)
     public void scheduledFlush() {
         log.info("[SCHEDULER] Running window flush check...");
+
         Set<String> services = new HashSet<>(windowMap.keySet());
         for (String service : services) {
             flushIfNeeded(service);
