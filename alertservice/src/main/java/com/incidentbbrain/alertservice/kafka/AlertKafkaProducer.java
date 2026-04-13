@@ -1,6 +1,7 @@
 package com.incidentbbrain.alertservice.kafka;
 
 import com.incidentbbrain.alertservice.model.Alert;
+import com.incidentbbrain.incidentbraincommon.common.AlertEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -22,7 +23,7 @@ public class AlertKafkaProducer {
         AlertEvent event = AlertEvent.builder()
                 .alertId(alert.getId().toString())
                 .serviceName(alert.getServiceName())
-                .severity(alert.getSeverity())
+                .severity(alert.getSeverity().name())
                 .message(alert.getMessage())
                 .host(alert.getHost())
                 .timestamp(Instant.now().toString())
