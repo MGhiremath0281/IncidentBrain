@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -24,6 +25,16 @@ public class IncidentController {
         return map(incident);
     }
 
+    @GetMapping
+    public List<IncidentResponse> getAllIncidents() {
+
+        log.info("[CONTROLLER] Fetch all incidents API called");
+
+        return service.getAllIncidents()
+                .stream()
+                .map(this::map)
+                .toList();
+    }
     @PatchMapping("/{id}/resolve")
     public IncidentResponse resolveIncident(
             @PathVariable UUID id,

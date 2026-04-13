@@ -2,6 +2,7 @@ package com.incidentbbrain.correlationservice.service;
 
 
 import com.incidentbbrain.correlationservice.entity.Incident;
+import com.incidentbbrain.correlationservice.entity.Severity;
 import com.incidentbbrain.correlationservice.kafka.event.AlertEvent;
 import com.incidentbbrain.correlationservice.repository.IncidentRepository;
 import lombok.Builder;
@@ -11,6 +12,7 @@ import org.apache.kafka.common.errors.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -58,10 +60,16 @@ public class IncidentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Incident not found"));
     }
 
-    private String findMaxSeverity(List<AlertEvent> alerts) {
+    private Severity findMaxSeverity(List<AlertEvent> alerts) {
         return alerts.stream()
                 .map(AlertEvent::getSeverity)
-                .max(String::compareTo)
-                .orElse("LOW");
+                .max(Comparator.naturalOrder())
+                .orElse(Severity.LOW);
+    }
+
+    public List<Incident> getAllIncidents() {
+        log.info("[SERVICE] Fetching all incidents");
+
+        return repository.findAll();
     }
 }
