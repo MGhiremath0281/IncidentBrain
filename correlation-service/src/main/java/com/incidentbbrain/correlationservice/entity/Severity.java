@@ -1,4 +1,4 @@
-package com.incidentbbrain.alertservice.enums;
+package com.incidentbbrain.correlationservice.entity;
 
 public enum Severity {
     CRITICAL,
@@ -6,3 +6,4 @@ public enum Severity {
     MEDIUM,
     LOW
 }
+
