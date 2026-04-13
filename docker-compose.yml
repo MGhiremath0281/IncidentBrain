@@ -34,6 +34,7 @@ services:
       PGTZ: UTC
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
 
 volumes:
   pgdata:
