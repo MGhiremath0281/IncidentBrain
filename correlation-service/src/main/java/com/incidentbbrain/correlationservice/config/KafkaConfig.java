@@ -1,6 +1,10 @@
 package com.incidentbbrain.correlationservice.config;
 
-import com.fasterxml.jackson.databind.JsonDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
+
+import org.springframework.kafka.support.serializer.JsonDeserializer;
+import org.springframework.kafka.support.serializer.JsonSerializer;
 import com.incidentbbrain.correlationservice.kafka.event.AlertEvent;
 import com.incidentbbrain.correlationservice.kafka.event.IncidentEvent;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
