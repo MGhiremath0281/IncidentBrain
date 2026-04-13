@@ -1,15 +1,18 @@
 package com.incidentbbrain.correlationservice.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+
 @Data
+@Builder
+@Entity
+@AllArgsConstructor
+@NoArgsConstructor
 public class Incident {
 
     @Id

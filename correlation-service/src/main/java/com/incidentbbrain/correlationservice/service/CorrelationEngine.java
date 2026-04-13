@@ -1,11 +1,21 @@
 package com.incidentbbrain.correlationservice.service;
 
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
+import com.incidentbbrain.correlationservice.entity.Incident;
+import com.incidentbbrain.correlationservice.kafka.event.IncidentEvent;
 import com.incidentbbrain.correlationservice.kafka.producer.IncidentProducer;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import com.incidentbbrain.correlationservice.kafka.event.AlertEvent;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class CorrelationEngine {
 
     private final IncidentService incidentService;
