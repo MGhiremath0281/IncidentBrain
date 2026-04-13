@@ -1,4 +1,4 @@
-package com.incidentbbrain.correlationservice.kafka.event.kafka.producer;
+package com.incidentbbrain.correlationservice.kafka.producer;
 
 import com.incidentbbrain.correlationservice.kafka.event.IncidentEvent;
 import lombok.RequiredArgsConstructor;
