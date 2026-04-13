@@ -3,12 +3,10 @@ package com.incidentbbrain.correlationservice.service;
 
 import com.incidentbbrain.correlationservice.entity.Incident;
 import com.incidentbbrain.correlationservice.entity.Severity;
-import com.incidentbbrain.correlationservice.kafka.event.AlertEvent;
 import com.incidentbbrain.correlationservice.repository.IncidentRepository;
-import lombok.Builder;
+import com.incidentbbrain.incidentbraincommon.common.AlertEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.common.errors.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -19,7 +17,6 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@Builder
 public class IncidentService {
 
     private final IncidentRepository repository;
@@ -29,7 +26,9 @@ public class IncidentService {
         Incident incident = Incident.builder()
                 .affectedService(service)
                 .severity(findMaxSeverity(alerts))
-                .alertIds(alerts.stream().map(AlertEvent::getId).toList())
+                .alertIds(alerts.stream()
+                        .map(alert -> UUID.fromString(alert.getAlertId()))
+                        .toList())
                 .title("Incident in " + service)
                 .status("OPEN")
                 .startedAt(LocalDateTime.now())
@@ -45,7 +44,7 @@ public class IncidentService {
 
     public Incident resolveIncident(UUID id, LocalDateTime resolvedAt) {
         Incident incident = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Incident not found"));
+                .orElseThrow(() -> new RuntimeException("Incident not found"));
 
         incident.setStatus("RESOLVED");
         incident.setResolvedAt(resolvedAt != null ? resolvedAt : LocalDateTime.now());
@@ -57,19 +56,25 @@ public class IncidentService {
 
     public Incident getIncident(UUID id) {
         return repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Incident not found"));
+                .orElseThrow(() -> new RuntimeException("Incident not found"));
     }
 
     private Severity findMaxSeverity(List<AlertEvent> alerts) {
         return alerts.stream()
-                .map(AlertEvent::getSeverity)
+                // FIX: Convert String severity to Enum Severity
+                .map(alert -> {
+                    try {
+                        return Severity.valueOf(alert.getSeverity().toUpperCase());
+                    } catch (Exception e) {
+                        return Severity.LOW; // Fallback if String doesn't match Enum
+                    }
+                })
                 .max(Comparator.naturalOrder())
                 .orElse(Severity.LOW);
     }
 
     public List<Incident> getAllIncidents() {
         log.info("[SERVICE] Fetching all incidents");
-
         return repository.findAll();
     }
 }
