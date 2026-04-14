@@ -3,7 +3,6 @@ package com.incidentbbrain.correlationservice.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.incidentbbrain.correlationservice.dto.ResolveIncidentRequest;
 import com.incidentbbrain.correlationservice.entity.Incident;
-import com.incidentbbrain.correlationservice.entity.Severity;
 import com.incidentbbrain.correlationservice.service.IncidentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

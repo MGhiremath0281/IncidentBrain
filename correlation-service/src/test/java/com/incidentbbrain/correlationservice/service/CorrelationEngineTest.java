@@ -1,7 +1,7 @@
 package com.incidentbbrain.correlationservice.service;
 
 import com.incidentbbrain.correlationservice.kafka.producer.IncidentProducer;
-import com.incidentbbrain.correlationservice.kafka.event.IncidentEvent;
+import com.incidentbbrain.incidentbraincommon.common.IncidentEvent;
 import com.incidentbbrain.incidentbraincommon.common.AlertEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
