@@ -6,7 +6,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
-import com.incidentbbrain.correlationservice.kafka.event.IncidentEvent;
+import com.incidentbbrain.incidentbraincommon.common.IncidentEvent;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.springframework.context.annotation.Bean;
