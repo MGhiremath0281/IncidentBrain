@@ -1,4 +1,4 @@
-package com.incidentbbrain.correlationservice.entity;
+package com.incidentbbrain.contextservice.dto;
 
 public enum Severity {
     CRITICAL,
@@ -6,4 +6,3 @@ public enum Severity {
     MEDIUM,
     LOW
 }
-
