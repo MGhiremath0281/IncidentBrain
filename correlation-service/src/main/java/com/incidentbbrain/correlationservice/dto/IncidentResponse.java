@@ -1,7 +1,7 @@
 package com.incidentbbrain.correlationservice.dto;
 
 
-import com.incidentbbrain.correlationservice.entity.Severity;
+import com.incidentbbrain.incidentbraincommon.common.Severity;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
