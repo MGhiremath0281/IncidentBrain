@@ -1,23 +1,26 @@
-package com.incidentbbrain.correlationservice.kafka.event;
+package com.incidentbbrain.incidentbraincommon.common;
 
-import com.incidentbbrain.correlationservice.entity.Severity;
-import jakarta.persistence.Id;
-import lombok.Builder;
-import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-
+@Getter
+@Setter
 @Builder
-@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class IncidentEvent {
 
-    @Id
     private UUID id;
     private String service;
     private Severity severity;
+    private String status;
     private List<UUID> alertIds;
+
+    private String title;
+
+    private LocalDateTime startedAt;
+    private LocalDateTime resolvedAt;
 }
