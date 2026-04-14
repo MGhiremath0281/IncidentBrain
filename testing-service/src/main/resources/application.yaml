@@ -38,11 +38,14 @@ management:
     tags:
       application: ${spring.application.name}
 
-  prometheus:
-    metrics:
-      export:
-        enabled: true
+  info:
+    env:
+      enabled: true
 
-  tracing:
-    sampling:
-      probability: 1.0
+info:
+  app:
+    name: testing-service
+    version: 0.0.1
+    deployment: docker
+    container: ${HOSTNAME:local}
+    java: ${java.version}
