@@ -1,6 +1,6 @@
 package com.incidentbbrain.correlationservice.kafka.producer;
 
-import com.incidentbbrain.correlationservice.kafka.event.IncidentEvent;
+import com.incidentbbrain.incidentbraincommon.common.IncidentEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -15,6 +15,11 @@ public class IncidentProducer {
 
     public void publish(IncidentEvent event) {
         log.info("[KAFKA-PRODUCER] Sending incident: {}", event.getId());
-        kafkaTemplate.send("incidents.created", event);
+        kafkaTemplate.send(
+                "incidents.created",
+                event.getId().toString(),
+                event
+        );
+
     }
 }
