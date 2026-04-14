@@ -1,5 +1,10 @@
 package com.incidentbbrain.testingservice.dto;
 
-public class UserRequest
-{
+import lombok.*;
+
+@Getter
+@Setter
+public class UserRequest {
+    private String name;
+    private String email;
 }
