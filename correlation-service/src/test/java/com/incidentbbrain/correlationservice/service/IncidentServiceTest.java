@@ -1,7 +1,6 @@
 package com.incidentbbrain.correlationservice.service;
 
 import com.incidentbbrain.correlationservice.entity.Incident;
-import com.incidentbbrain.correlationservice.entity.Severity;
 import com.incidentbbrain.correlationservice.repository.IncidentRepository;
 import com.incidentbbrain.incidentbraincommon.common.AlertEvent;
 import org.junit.jupiter.api.Test;

@@ -1,5 +1,6 @@
 package com.incidentbbrain.correlationservice.entity;
 
+import com.incidentbbrain.incidentbraincommon.common.Severity;
 import jakarta.persistence.*;
 import lombok.*;
 

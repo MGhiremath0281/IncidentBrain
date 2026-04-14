@@ -2,9 +2,9 @@ package com.incidentbbrain.correlationservice.service;
 
 
 import com.incidentbbrain.correlationservice.entity.Incident;
-import com.incidentbbrain.correlationservice.entity.Severity;
 import com.incidentbbrain.correlationservice.repository.IncidentRepository;
 import com.incidentbbrain.incidentbraincommon.common.AlertEvent;
+import com.incidentbbrain.incidentbraincommon.common.Severity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
