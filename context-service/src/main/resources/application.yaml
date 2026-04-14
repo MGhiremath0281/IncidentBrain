@@ -1,0 +1,28 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: context-service
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: context-group
+      auto-offset-reset: earliest
+      # These tell Spring how to turn bytes back into Java objects
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        # Crucial for mapping the JSON to your IncidentEvent class
+        spring.json.trusted.packages: "com.incidentbbrain.*"
+        spring.json.value.default.type: "com.incidentbbrain.contextservice.dto.IncidentEvent"
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+logging:
+  level:
+    root: INFO
+    org.springframework.kafka: INFO
