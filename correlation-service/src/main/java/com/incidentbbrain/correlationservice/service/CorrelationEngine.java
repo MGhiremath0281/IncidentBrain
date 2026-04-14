@@ -6,7 +6,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.incidentbbrain.correlationservice.entity.Incident;
-import com.incidentbbrain.correlationservice.kafka.event.IncidentEvent;
+import com.incidentbbrain.incidentbraincommon.common.IncidentEvent;
 import com.incidentbbrain.correlationservice.kafka.producer.IncidentProducer;
 import com.incidentbbrain.incidentbraincommon.common.AlertEvent;
 import lombok.RequiredArgsConstructor;
