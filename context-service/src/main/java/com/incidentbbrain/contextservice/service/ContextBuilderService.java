@@ -20,9 +20,10 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ContextBuilderService {
 
-    private final LogService logService;
+    private final ElasticsearchLogService logService;
+    private final ActuatorMetricsService metricsService;
     private final DeploymentService deploymentService;
-    private final MetricsService metricsService;
+
 
     public ContextPayload buildContext(IncidentEvent incident) {
 

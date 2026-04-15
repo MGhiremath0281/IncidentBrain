@@ -34,6 +34,7 @@ services:
       PGTZ: UTC
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
