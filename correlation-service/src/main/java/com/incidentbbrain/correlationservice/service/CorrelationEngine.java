@@ -21,16 +21,18 @@ public class CorrelationEngine {
 
     private final IncidentService incidentService;
     private final IncidentProducer producer;
-    private final Map<String, List<AlertEvent>> windowMap = new ConcurrentHashMap<>();
 
+    private final Map<String, List<AlertEvent>> windowMap = new ConcurrentHashMap<>();
     private final Map<String, Object> locks = new ConcurrentHashMap<>();
 
     public void process(AlertEvent alert) {
+
         String service = alert.getServiceName();
 
         locks.putIfAbsent(service, new Object());
 
         synchronized (locks.get(service)) {
+
             windowMap
                     .computeIfAbsent(service, k -> new ArrayList<>())
                     .add(alert);
@@ -56,6 +58,7 @@ public class CorrelationEngine {
             if (alerts.size() < 2 && !isWindowExpired(alerts)) {
                 return;
             }
+
             List<AlertEvent> toProcess = new ArrayList<>(alerts);
             windowMap.put(service, new ArrayList<>());
 
@@ -68,7 +71,11 @@ public class CorrelationEngine {
                     .id(incident.getId())
                     .service(service)
                     .severity(incident.getSeverity())
+                    .status(incident.getStatus())
                     .alertIds(incident.getAlertIds())
+                    .title(incident.getTitle())
+                    .startedAt(incident.getStartedAt())
+                    .resolvedAt(incident.getResolvedAt())
                     .build();
 
             producer.publish(event);
@@ -76,7 +83,8 @@ public class CorrelationEngine {
     }
 
     private boolean isWindowExpired(List<AlertEvent> alerts) {
-        if (alerts.isEmpty()) return false;
+
+        if (alerts == null || alerts.isEmpty()) return false;
 
         Object rawTimestamp = alerts.get(0).getTimestamp();
         LocalDateTime first;
@@ -95,9 +103,11 @@ public class CorrelationEngine {
 
     @Scheduled(fixedRate = 60000)
     public void scheduledFlush() {
+
         log.info("[SCHEDULER] Running window flush check...");
 
         Set<String> services = new HashSet<>(windowMap.keySet());
+
         for (String service : services) {
             flushIfNeeded(service);
         }
