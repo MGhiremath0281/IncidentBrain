@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Kafka consumer that listens for newly created incidents and triggers
- * the context enrichment pipeline.
+ * the dynamic enrichment pipeline (Logs, Metrics, Persistence).
  */
 @Slf4j
 @Component
@@ -35,20 +35,21 @@ public class IncidentConsumer {
             @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
             @Header(KafkaHeaders.OFFSET) long offset
     ) {
-        log.info("Received incident from topic={}, partition={}, offset={}: incidentId={}, service={}",
+        log.info("RECEIVED INCIDENT | Topic: {}, Partition: {}, Offset: {} | IncidentId: {}, Service: {}",
                 topic, partition, offset, incident.getId(), incident.getService());
 
         try {
-            // Build enriched context using IncidentEvent directly
-            ContextPayload contextPayload = contextBuilderService.buildContext(incident);
+            // 1. Logic triggers: Fetch Logs (Time-Window), Fetch Metrics (Dynamic URL), and Save to Postgres
+            ContextPayload contextPayload = contextBuilderService.enrich(incident);
 
-            // Publish to downstream topic
+            // 2. Publish enriched snapshot to downstream Kafka topic
             contextProducer.publishContext(contextPayload);
 
-            log.info("Successfully processed incidentId={}", incident.getId());
+            log.info("SUCCESS | Enriched and persisted incidentId: {}", incident.getId());
 
         } catch (Exception e) {
-            log.error("Failed to process incidentId={}: {}", incident.getId(), e.getMessage(), e);
+            log.error("ERROR | Failed to process incidentId: {} | Reason: {}", incident.getId(), e.getMessage(), e);
+            // Re-throwing allows Kafka to handle retries if configured
             throw e;
         }
     }
