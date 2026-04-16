@@ -22,14 +22,13 @@ services:
 
   postgres:
     image: postgres:15
-    container_name: postgres
+    container_name: incident-postgres
     restart: always
     ports:
       - "5432:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: secret
-      POSTGRES_DB: incident_db
       TZ: UTC
       PGTZ: UTC
     volumes:
@@ -45,48 +44,13 @@ services:
       - ES_JAVA_OPTS=-Xms1g -Xmx1g
     ports:
       - "9200:9200"
+    # FIX: healthcheck so dependents wait until ES is truly ready
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
-
-  context-service:
-    build:
-      context: ./context-service
-      dockerfile: Dockerfile
-    container_name: context-service
-    ports:
-      - "8083:8083"
-    depends_on:
-      postgres:
-        condition: service_started
-      kafka:
-        condition: service_started
-      elasticsearch:
-        condition: service_healthy
-    environment:
-      - DB_URL=jdbc:postgresql://postgres:5432/incident_db
-      - DB_USER=postgres
-      - DB_PASSWORD=secret
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-    restart: on-failure
-
-  testing-service:
-    build:
-      context: ./testing-service
-      dockerfile: Dockerfile
-    container_name: testing-service
-    ports:
-      - "8084:8084"
-    depends_on:
-      logstash:
-        condition: service_healthy
-      elasticsearch:
-        condition: service_healthy
-    environment:
-      - JAVA_TOOL_OPTIONS=-Dsun.net.inetaddr.ttl=0
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.12.0
@@ -110,12 +74,29 @@ services:
       - "5044:5044"
     volumes:
       - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    # FIX: healthcheck so testing-service waits until port 5000 is accepting connections
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/5000' 2>/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 15
       start_period: 60s
+
+  testing-service:
+    build:
+      context: ./testing-service
+      dockerfile: Dockerfile
+    container_name: testing-service
+    ports:
+      - "8084:8084"
+    # FIX: now waits for logstash to be healthy (port 5000 open), not just started
+    depends_on:
+      logstash:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - JAVA_TOOL_OPTIONS=-Dsun.net.inetaddr.ttl=0
 
 volumes:
   pgdata:

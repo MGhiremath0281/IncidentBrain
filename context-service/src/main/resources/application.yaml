@@ -5,32 +5,28 @@ spring:
   application:
     name: context-service
 
-  # --- DATABASE CONFIGURATION (Postgres) ---
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/incident_db}
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:password}
-    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/incident_db
+    username: postgres
+    password: secret
+    hikari:
+      connection-init-sql: "SET TIME ZONE 'UTC'"
 
   jpa:
     hibernate:
-      ddl-auto: update # Automatically creates tables (enriched_incidents)
+      ddl-auto: update
     show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
 
-  # --- KAFKA CONFIGURATION ---
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: localhost:9092
+
     consumer:
       group-id: context-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: "com.incidentbbrain.incidentbraincommon.common,com.incidentbbrain.contextservice.dto"
+        spring.json.trusted.packages: "*"
         spring.json.use.type.headers: false
         spring.json.value.default.type: com.incidentbbrain.incidentbraincommon.common.IncidentEvent
 
@@ -52,10 +48,3 @@ eureka:
       defaultZone: http://localhost:8761/eureka/
   instance:
     prefer-ip-address: true
-
-logging:
-  level:
-    com.incidentbbrain.contextservice: DEBUG
-    org.hibernate.SQL: DEBUG # Useful for debugging DB inserts
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

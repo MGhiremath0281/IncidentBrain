@@ -8,5 +8,5 @@ import lombok.Setter;
 @Getter @Setter
 public class DynamicEndpointRegistry {
     private String elasticsearchUrl = "http://localhost:9200/logs-*/_search";
-    private String actuatorTemplate = "http://%s:8084/actuator";
+    private String actuatorTemplate = "http://localhost:8084/actuator";
 }
