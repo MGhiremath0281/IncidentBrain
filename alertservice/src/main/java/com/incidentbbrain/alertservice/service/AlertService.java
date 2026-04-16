@@ -74,6 +74,10 @@ public class AlertService {
         log.info("Alert ID {} status changed from {} to {}", id, oldStatus, status);
         return map(updated);
     }
+    public Page<AlertResponse> findAll(Pageable pageable) {
+        log.info("Fetching all alerts");
+        return repo.findAll(pageable).map(this::map);
+    }
 
     private AlertResponse map(Alert a) {
         return AlertResponse.builder()

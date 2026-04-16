@@ -54,4 +54,9 @@ public class AlertController {
         AlertStatus status = AlertStatus.valueOf(body.get("status"));
         return service.updateStatus(id, status);
     }
+
+    @GetMapping("/all")
+    public Page<AlertResponse> getAll(Pageable pageable) {
+        return service.findAll(pageable);
+    }
 }
