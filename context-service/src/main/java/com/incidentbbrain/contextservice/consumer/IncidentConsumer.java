@@ -12,10 +12,6 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
-/**
- * Kafka consumer that listens for newly created incidents and triggers
- * the context enrichment pipeline.
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -35,20 +31,28 @@ public class IncidentConsumer {
             @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
             @Header(KafkaHeaders.OFFSET) long offset
     ) {
-        log.info("Received incident from topic={}, partition={}, offset={}: incidentId={}, service={}",
-                topic, partition, offset, incident.getId(), incident.getService());
+        // Safety check to prevent NPE before logging
+        if (incident == null) {
+            log.error("RECEIVED NULL PAYLOAD | Topic: {}, Offset: {}", topic, offset);
+            return;
+        }
+
+        log.info("RECEIVED INCIDENT | Topic: {}, Partition: {}, Offset: {} | IncidentId: {}, Service: {}, StartedAt: {}",
+                topic, partition, offset, incident.getId(), incident.getService(), incident.getStartedAt());
 
         try {
-            // Build enriched context using IncidentEvent directly
-            ContextPayload contextPayload = contextBuilderService.buildContext(incident);
+            // 1. Logic triggers: Fetch Logs, Metrics, and Persistence
+            ContextPayload contextPayload = contextBuilderService.enrich(incident);
 
-            // Publish to downstream topic
+            // 2. Publish enriched snapshot
             contextProducer.publishContext(contextPayload);
 
-            log.info("Successfully processed incidentId={}", incident.getId());
+            log.info("SUCCESS | Enriched and persisted incidentId: {}", incident.getId());
 
         } catch (Exception e) {
-            log.error("Failed to process incidentId={}: {}", incident.getId(), e.getMessage(), e);
+            log.error("ERROR | Failed to process incidentId: {} | Reason: {}",
+                    incident.getId(), e.getMessage());
+            // Re-throw so Kafka ErrorHandler (Backoff) can kick in
             throw e;
         }
     }

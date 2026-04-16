@@ -1,79 +1,72 @@
 package com.incidentbbrain.contextservice.service;
 
 import com.incidentbbrain.contextservice.dto.ContextPayload;
-import com.incidentbbrain.contextservice.dto.DeploymentInfo;
 import com.incidentbbrain.contextservice.dto.MetricsSnapshot;
+import com.incidentbbrain.contextservice.entity.EnrichedIncident;
+import com.incidentbbrain.contextservice.repository.IncidentRepository;
 import com.incidentbbrain.incidentbraincommon.common.IncidentEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * Orchestrates the context enrichment process by combining data from
- * log, deployment, and metrics services.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ContextBuilderService {
 
-    private final LogService logService;
-    private final DeploymentService deploymentService;
-    private final MetricsService metricsService;
+    private final ElasticsearchLogService logService;
+    private final ActuatorMetricsService metricsService;
+    private final IncidentRepository repository;
 
-    public ContextPayload buildContext(IncidentEvent incident) {
+    public ContextPayload enrich(IncidentEvent event) {
+        log.info("Starting context enrichment for incident: {} from service: {}",
+                event.getId(), event.getService());
 
-        log.info("Building context for incidentId={}, service={}, severity={}",
-                incident.getId(), incident.getService(), incident.getSeverity());
+        List<String> logs = logService.getLogs(event.getService(), event.getStartedAt());
+        log.debug("Captured {} log lines from Elasticsearch", logs.size());
 
-        long startTime = System.currentTimeMillis();
+        MetricsSnapshot metrics = metricsService.getMetrics(event.getService());
 
-        // 1. Fetch logs
-        List<String> logs = logService.getLogsForService(
-                incident.getService(),
-                incident.getId(),
-                incident.getStartedAt()
-        );
-
-        // 2. Fetch deployment info
-        DeploymentInfo deploymentInfo = deploymentService.getDeploymentInfo(
-                incident.getService()
-        );
-
-        // 3. Fetch metrics
-        MetricsSnapshot metricsSnapshot = metricsService.getMetricsSnapshot(
-                incident.getService(),
-                incident.getSeverity()
-        );
-
-        // 4. Build payload
         ContextPayload payload = ContextPayload.builder()
-                .incidentId(incident.getId())
-                .service(incident.getService())
-                .severity(incident.getSeverity())
-                .status(incident.getStatus())
-                .title(incident.getTitle())
-                .alertIds(incident.getAlertIds())   // ✅ IMPORTANT (you were missing this mapping)
-                .incidentStartedAt(incident.getStartedAt())
-                .resolvedAt(incident.getResolvedAt()) // ✅ important for lifecycle tracking
+                .incidentId(event.getId())
+                .service(event.getService())
+                .severity(event.getSeverity())
+                .status(event.getStatus())
+                .title(event.getTitle())
+                .alertIds(event.getAlertIds())
+                .incidentStartedAt(event.getStartedAt())
+                .resolvedAt(event.getResolvedAt())
                 .logs(logs)
-                .deploymentInfo(deploymentInfo)
-                .metricsSnapshot(metricsSnapshot)
+                .metricsSnapshot(metrics)
                 .enrichedAt(LocalDateTime.now())
                 .build();
 
-        long duration = System.currentTimeMillis() - startTime;
 
-        log.info("Context built for incidentId={} in {}ms: logs={}, deploymentVersion={}, metrics=captured",
-                incident.getId(),
-                duration,
-                logs.size(),
-                deploymentInfo.getVersion()
-        );
+        saveToDatabase(payload);
 
         return payload;
+    }
+
+    private void saveToDatabase(ContextPayload p) {
+        try {
+            EnrichedIncident entity = EnrichedIncident.builder()
+                    .incidentId(p.getIncidentId())
+                    .service(p.getService())
+                    .severity(p.getSeverity())
+                    .alertIds(p.getAlertIds())
+                    .logs(p.getLogs())
+                    .metrics(p.getMetricsSnapshot())
+                    .incidentStartedAt(p.getIncidentStartedAt())
+                    .enrichedAt(p.getEnrichedAt())
+                    .build();
+
+            repository.save(entity);
+            log.info("Successfully persisted enriched context for incident ID: {}", p.getIncidentId());
+        } catch (Exception ex) {
+            log.error("CRITICAL: Database persistence failed for incident {}: {}",
+                    p.getIncidentId(), ex.getMessage());
+        }
     }
 }

@@ -1,6 +1,5 @@
-version: '3.8'
-
 services:
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
     container_name: zookeeper
@@ -30,11 +29,75 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: secret
-      POSTGRES_DB: incidentbrain
       TZ: UTC
       PGTZ: UTC
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    ports:
+      - "9200:9200"
+    # FIX: healthcheck so dependents wait until ES is truly ready
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: kibana
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.12.0
+    container_name: logstash
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+      - "5044:5044"
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    # FIX: healthcheck so testing-service waits until port 5000 is accepting connections
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/5000' 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  testing-service:
+    build:
+      context: ./testing-service
+      dockerfile: Dockerfile
+    container_name: testing-service
+    ports:
+      - "8084:8084"
+    # FIX: now waits for logstash to be healthy (port 5000 open), not just started
+    depends_on:
+      logstash:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - JAVA_TOOL_OPTIONS=-Dsun.net.inetaddr.ttl=0
 
 volumes:
   pgdata:
+  esdata:

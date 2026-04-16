@@ -1,22 +1,21 @@
 package com.incidentbbrain.contextservice.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.*;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class MetricsSnapshot {
-    private double cpuUsagePercent;
-    private double memoryUsagePercent;
-    private double errorRatePercent;
-    private long requestsPerSecond;
-    private double avgResponseTimeMs;
-    private long activeConnections;
-    private LocalDateTime capturedAt;
+    private Double systemCpuUsage;
+    private Double jvmMemoryUsed;
+    private Double httpRequests;
+    private String healthStatus;
+    private LocalDateTime fetchedAt;
+
+    private Map<String, Object> details;
 }

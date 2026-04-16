@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+
+        <!-- Direct Docker DNS name for logstash container -->
+        <destination>logstash:5000</destination>
+
+        <!-- FIX: wait longer between reconnection attempts (Logstash takes ~45-60s to start) -->
+        <reconnectionDelay>15 seconds</reconnectionDelay>
+
+        <!-- FIX: keep trying to connect indefinitely so logs are sent once Logstash is ready -->
+        <connectionStrategy>
+            <roundRobin>
+                <connectionTTL>5 minutes</connectionTTL>
+            </roundRobin>
+        </connectionStrategy>
+
+        <!-- FIX: increase the ring buffer so log events are not dropped during startup -->
+        <ringBufferSize>131072</ringBufferSize>
+
+        <!-- FIX: do not block the app if Logstash is not yet reachable -->
+        <neverBlock>true</neverBlock>
+
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"service":"testing-service"}</customFields>
+        </encoder>
+
+    </appender>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d %-5level %logger - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="LOGSTASH"/>
+    </root>
+
+</configuration>
