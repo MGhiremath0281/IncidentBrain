@@ -5,6 +5,11 @@ spring:
   application:
     name: context-service
 
+  # Fix for readable dates in JSON output
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
   datasource:
     url: jdbc:postgresql://localhost:5432/incident_db
     username: postgres
@@ -19,7 +24,6 @@ spring:
 
   kafka:
     bootstrap-servers: localhost:9092
-
     consumer:
       group-id: context-group
       auto-offset-reset: earliest
