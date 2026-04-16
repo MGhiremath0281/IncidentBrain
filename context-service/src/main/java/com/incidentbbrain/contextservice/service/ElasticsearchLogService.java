@@ -26,13 +26,11 @@ public class ElasticsearchLogService {
     private final ObjectMapper objectMapper;
 
     public List<String> getLogs(String service, LocalDateTime startedAt) {
-        if (startedAt == null) {
-            log.warn("startedAt is null for service: {}. Using now.", service);
-            startedAt = LocalDateTime.now();
-        }
+        LocalDateTime time = (startedAt != null) ? startedAt : LocalDateTime.now();
 
-        String gte = startedAt.minusMinutes(5).toInstant(ZoneOffset.UTC).toString();
-        String lte = startedAt.plusMinutes(1).toInstant(ZoneOffset.UTC).toString();
+        // Looking +/- 2 minutes around the incident
+        String gte = time.minusMinutes(2).toInstant(ZoneOffset.UTC).toString();
+        String lte = time.plusMinutes(2).toInstant(ZoneOffset.UTC).toString();
 
         String query = """
         {
@@ -42,50 +40,73 @@ public class ElasticsearchLogService {
               "filter": [{ "range": { "@timestamp": { "gte": "%s", "lte": "%s" } } }]
             }
           },
+          "sort": [{ "@timestamp": "desc" }],
           "size": 50
         }
         """.formatted(service, gte, lte);
 
         try {
-            // FIX: Explicitly set Content-Type to application/json
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<String> entity = new HttpEntity<>(query, headers);
 
             String rawResponse = restTemplate.postForObject(
                     registry.getElasticsearchUrl(),
-                    entity, // Pass the entity with headers instead of just the string
+                    entity,
                     String.class
             );
 
-            return parseMessages(rawResponse);
+            return parseMeaningfulLogs(rawResponse);
         } catch (Exception e) {
-            log.error("Failed to fetch logs from ES: {}", e.getMessage());
+            log.error("Elasticsearch query failed: {}", e.getMessage());
             return new ArrayList<>();
         }
     }
 
-    private List<String> parseMessages(String jsonResponse) {
-        List<String> messages = new ArrayList<>();
+    private List<String> parseMeaningfulLogs(String jsonResponse) {
+        List<String> logs = new ArrayList<>();
         try {
-            JsonNode root = objectMapper.readTree(jsonResponse);
-            JsonNode hits = root.path("hits").path("hits");
-            if (hits.isArray()) {
-                for (JsonNode hit : hits) {
-                    // Navigate to the message field based on your ES structure
-                    JsonNode messageNode = hit.path("_source").path("message");
-                    if (messageNode.isMissingNode()) {
-                        // Fallback for some logstash structures
-                        messageNode = hit.path("fields").path("message").get(0);
-                    }
-                    if (messageNode != null && !messageNode.isMissingNode()) {
-                        messages.add(messageNode.asText());
+            JsonNode hits = objectMapper.readTree(jsonResponse).path("hits").path("hits");
+            for (JsonNode hit : hits) {
+                JsonNode source = hit.path("_source");
+                String level = source.path("level").asText("INFO");
+                String message = source.path("message").asText("");
+
+                if (isCritical(level, message)) {
+                    String formattedLog = String.format("[%s] %s - %s",
+                            source.path("@timestamp").asText("N/A"),
+                            level.toUpperCase(),
+                            message
+                    );
+
+                    if (!logs.contains(formattedLog)) {
+                        logs.add(formattedLog);
                     }
                 }
+
+                // Keep it focused: 15 meaningful lines is plenty for the "Brain"
+                if (logs.size() >= 15) break;
             }
         } catch (Exception e) {
-            log.error("Error parsing ES response: {}", e.getMessage());
+            log.error("Error parsing ES JSON: {}", e.getMessage());
         }
-        return messages;
+        return logs;
+    }
+
+    private boolean isCritical(String level, String message) {
+        if (message == null || message.isEmpty()) return false;
+
+        String msg = message.toLowerCase();
+        String lvl = level.toUpperCase();
+
+        return lvl.equals("ERROR") ||
+                lvl.equals("WARN") ||
+                lvl.equals("FATAL") ||
+                msg.contains("exception") ||
+                msg.contains("cause") ||
+                msg.contains("failed") ||
+                msg.contains("timeout") ||
+                msg.contains("denied") ||
+                msg.contains("error"); // Catches errors buried in INFO messages
     }
 }
