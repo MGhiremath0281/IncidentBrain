@@ -28,11 +28,9 @@ public class ElasticsearchLogService {
     public List<String> getLogs(String service, LocalDateTime startedAt, String reason) {
         LocalDateTime time = (startedAt != null) ? startedAt : LocalDateTime.now();
 
-        // Expanding window slightly to 5 minutes to account for ingestion lag
         String gte = time.minusMinutes(5).toInstant(ZoneOffset.UTC).toString();
         String lte = time.plusMinutes(2).toInstant(ZoneOffset.UTC).toString();
 
-        // Broader keywords to ensure we don't miss "DuplicateUserException" or other stack traces
         String keywordQuery = switch (reason) {
             case "DATABASE_EXHAUSTED" -> "hikari OR connection OR database OR sql OR pool OR exhausted";
             case "HIGH_LATENCY" -> "timeout OR slow OR latency OR duration OR delay OR exception OR error";
@@ -40,20 +38,13 @@ public class ElasticsearchLogService {
             default -> "error OR exception OR fail OR stacktrace";
         };
 
-        // Added a "minimum_should_match" style logic via query_string
         String query = """
         {
           "query": {
             "bool": {
-              "must": [
-                { "match": { "service": "%s" } }
-              ],
-              "should": [
-                { "query_string": { "query": "%s" } }
-              ],
-              "filter": [
-                { "range": { "@timestamp": { "gte": "%s", "lte": "%s" } } }
-              ],
+              "must": [ { "match": { "service": "%s" } } ],
+              "should": [ { "query_string": { "query": "%s" } } ],
+              "filter": [ { "range": { "@timestamp": { "gte": "%s", "lte": "%s" } } } ],
               "minimum_should_match": 0
             }
           },
@@ -66,8 +57,6 @@ public class ElasticsearchLogService {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<String> entity = new HttpEntity<>(query, headers);
-
-            log.info("Querying ES for logs. Service: {}, Reason: {}, Keywords: {}", service, reason, keywordQuery);
 
             String rawResponse = restTemplate.postForObject(
                     registry.getElasticsearchUrl(),
@@ -89,28 +78,54 @@ public class ElasticsearchLogService {
             JsonNode hits = root.path("hits").path("hits");
 
             if (hits.isMissingNode() || hits.isEmpty()) {
-                log.warn("No logs found in Elasticsearch for the given criteria.");
+                log.warn("No logs found in Elasticsearch.");
                 return logs;
             }
 
             for (JsonNode hit : hits) {
                 JsonNode source = hit.path("_source");
-                String level = source.path("level").asText("INFO");
-                String message = source.path("message").asText("");
+                String level = source.path("level").asText("INFO").toUpperCase();
                 String timestamp = source.path("@timestamp").asText("N/A");
+                String rawMessage = source.path("message").asText("");
 
-                // We want to capture the log if it's an Error/Warn OR if it's the actual Exception message
-                String formattedLog = String.format("[%s] %s - %s", timestamp, level.toUpperCase(), message);
+                // SEPARATED CLEANING LOGIC
+                String cleanMessage = simplifyMessage(rawMessage);
+
+                String formattedLog = String.format("[%s] %s - %s", timestamp, level, cleanMessage);
 
                 if (!logs.contains(formattedLog)) {
                     logs.add(formattedLog);
                 }
 
-                if (logs.size() >= 20) break; // Increased to 20 for better AI context
+                if (logs.size() >= 15) break;
             }
         } catch (Exception e) {
             log.error("Error parsing ES JSON: {}", e.getMessage());
         }
         return logs;
+    }
+
+    /**
+     * Helper to extract core error details and separate them from system noise.
+     */
+    private String simplifyMessage(String message) {
+        if (message == null || message.isEmpty()) return "No content";
+
+        // Logic 1: Extract Exception within brackets (Spring's default error format)
+        if (message.contains("exception [")) {
+            int start = message.indexOf("exception [") + 11;
+            int end = message.indexOf("]", start);
+            if (end > start) {
+                return "CORE_ERROR: " + message.substring(start, end);
+            }
+        }
+
+        // Logic 2: Handle specific application business logs
+        if (message.contains("Creating user")) return message;
+        if (message.contains("Deleting user")) return message;
+        if (message.contains("failure")) return "APP_FAILURE: " + message;
+
+        // Logic 3: Truncate everything else if it's too long
+        return (message.length() > 120) ? message.substring(0, 117) + "..." : message;
     }
 }
