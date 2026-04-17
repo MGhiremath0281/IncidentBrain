@@ -25,30 +25,49 @@ public class ElasticsearchLogService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    public List<String> getLogs(String service, LocalDateTime startedAt) {
+    public List<String> getLogs(String service, LocalDateTime startedAt, String reason) {
         LocalDateTime time = (startedAt != null) ? startedAt : LocalDateTime.now();
 
-        // Looking +/- 2 minutes around the incident
-        String gte = time.minusMinutes(2).toInstant(ZoneOffset.UTC).toString();
+        // Expanding window slightly to 5 minutes to account for ingestion lag
+        String gte = time.minusMinutes(5).toInstant(ZoneOffset.UTC).toString();
         String lte = time.plusMinutes(2).toInstant(ZoneOffset.UTC).toString();
 
+        // Broader keywords to ensure we don't miss "DuplicateUserException" or other stack traces
+        String keywordQuery = switch (reason) {
+            case "DATABASE_EXHAUSTED" -> "hikari OR connection OR database OR sql OR pool OR exhausted";
+            case "HIGH_LATENCY" -> "timeout OR slow OR latency OR duration OR delay OR exception OR error";
+            case "SERVICE_DOWN" -> "error OR crash OR stop OR oom OR fatal OR " + service;
+            default -> "error OR exception OR fail OR stacktrace";
+        };
+
+        // Added a "minimum_should_match" style logic via query_string
         String query = """
         {
           "query": {
             "bool": {
-              "must": [{ "match": { "service": "%s" } }],
-              "filter": [{ "range": { "@timestamp": { "gte": "%s", "lte": "%s" } } }]
+              "must": [
+                { "match": { "service": "%s" } }
+              ],
+              "should": [
+                { "query_string": { "query": "%s" } }
+              ],
+              "filter": [
+                { "range": { "@timestamp": { "gte": "%s", "lte": "%s" } } }
+              ],
+              "minimum_should_match": 0
             }
           },
           "sort": [{ "@timestamp": "desc" }],
           "size": 50
         }
-        """.formatted(service, gte, lte);
+        """.formatted(service, keywordQuery, gte, lte);
 
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<String> entity = new HttpEntity<>(query, headers);
+
+            log.info("Querying ES for logs. Service: {}, Reason: {}, Keywords: {}", service, reason, keywordQuery);
 
             String rawResponse = restTemplate.postForObject(
                     registry.getElasticsearchUrl(),
@@ -58,7 +77,7 @@ public class ElasticsearchLogService {
 
             return parseMeaningfulLogs(rawResponse);
         } catch (Exception e) {
-            log.error("Elasticsearch query failed: {}", e.getMessage());
+            log.error("Elasticsearch query failed for reason {}: {}", reason, e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -66,47 +85,32 @@ public class ElasticsearchLogService {
     private List<String> parseMeaningfulLogs(String jsonResponse) {
         List<String> logs = new ArrayList<>();
         try {
-            JsonNode hits = objectMapper.readTree(jsonResponse).path("hits").path("hits");
+            JsonNode root = objectMapper.readTree(jsonResponse);
+            JsonNode hits = root.path("hits").path("hits");
+
+            if (hits.isMissingNode() || hits.isEmpty()) {
+                log.warn("No logs found in Elasticsearch for the given criteria.");
+                return logs;
+            }
+
             for (JsonNode hit : hits) {
                 JsonNode source = hit.path("_source");
                 String level = source.path("level").asText("INFO");
                 String message = source.path("message").asText("");
+                String timestamp = source.path("@timestamp").asText("N/A");
 
-                if (isCritical(level, message)) {
-                    String formattedLog = String.format("[%s] %s - %s",
-                            source.path("@timestamp").asText("N/A"),
-                            level.toUpperCase(),
-                            message
-                    );
+                // We want to capture the log if it's an Error/Warn OR if it's the actual Exception message
+                String formattedLog = String.format("[%s] %s - %s", timestamp, level.toUpperCase(), message);
 
-                    if (!logs.contains(formattedLog)) {
-                        logs.add(formattedLog);
-                    }
+                if (!logs.contains(formattedLog)) {
+                    logs.add(formattedLog);
                 }
 
-                // Keep it focused: 15 meaningful lines is plenty for the "Brain"
-                if (logs.size() >= 15) break;
+                if (logs.size() >= 20) break; // Increased to 20 for better AI context
             }
         } catch (Exception e) {
             log.error("Error parsing ES JSON: {}", e.getMessage());
         }
         return logs;
-    }
-
-    private boolean isCritical(String level, String message) {
-        if (message == null || message.isEmpty()) return false;
-
-        String msg = message.toLowerCase();
-        String lvl = level.toUpperCase();
-
-        return lvl.equals("ERROR") ||
-                lvl.equals("WARN") ||
-                lvl.equals("FATAL") ||
-                msg.contains("exception") ||
-                msg.contains("cause") ||
-                msg.contains("failed") ||
-                msg.contains("timeout") ||
-                msg.contains("denied") ||
-                msg.contains("error"); // Catches errors buried in INFO messages
     }
 }

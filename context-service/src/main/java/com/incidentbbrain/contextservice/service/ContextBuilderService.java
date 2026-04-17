@@ -21,12 +21,17 @@ public class ContextBuilderService {
     private final IncidentRepository repository;
 
     public ContextPayload enrich(IncidentEvent event) {
-        log.info("Starting context enrichment for incident: {} from service: {}",
-                event.getId(), event.getService());
+        // Extract reason (e.g., HIGH_LATENCY) from title for targeted forensics
+        String title = event.getTitle() != null ? event.getTitle() : "";
+        String reason = title.contains(" ") ? title.split(" ")[0] : "GENERIC_ERROR";
 
-        List<String> logs = logService.getLogs(event.getService(), event.getStartedAt());
-        log.debug("Captured {} log lines from Elasticsearch", logs.size());
+        log.info("Starting context enrichment | Incident: {} | Service: {} | Reason: {}",
+                event.getId(), event.getService(), reason);
 
+        // Fetch logs - passing 3 arguments: service, timestamp, and reason
+        List<String> logs = logService.getLogs(event.getService(), event.getStartedAt(), reason);
+
+        // Fetch performance metrics
         MetricsSnapshot metrics = metricsService.getMetrics(event.getService());
 
         ContextPayload payload = ContextPayload.builder()
@@ -43,9 +48,7 @@ public class ContextBuilderService {
                 .enrichedAt(LocalDateTime.now())
                 .build();
 
-
         saveToDatabase(payload);
-
         return payload;
     }
 
@@ -63,10 +66,9 @@ public class ContextBuilderService {
                     .build();
 
             repository.save(entity);
-            log.info("Successfully persisted enriched context for incident ID: {}", p.getIncidentId());
+            log.info("Successfully persisted enriched context for incident: {}", p.getIncidentId());
         } catch (Exception ex) {
-            log.error("CRITICAL: Database persistence failed for incident {}: {}",
-                    p.getIncidentId(), ex.getMessage());
+            log.error("CRITICAL: DB persistence failed for incident {}: {}", p.getIncidentId(), ex.getMessage());
         }
     }
 }
