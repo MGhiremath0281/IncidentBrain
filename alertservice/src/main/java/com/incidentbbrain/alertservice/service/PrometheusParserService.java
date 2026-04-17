@@ -8,39 +8,33 @@ import java.util.List;
 
 @Service
 public class PrometheusParserService {
-
     public List<MetricPoint> parse(String raw) {
-
         List<MetricPoint> list = new ArrayList<>();
+        if (raw == null || raw.isBlank()) return list;
 
-        if (raw == null) return list;
-
-        String[] lines = raw.split("\n");
-
+        String[] lines = raw.split("\\n");
         for (String line : lines) {
-
             if (line.startsWith("#") || line.trim().isEmpty()) continue;
 
             try {
-                String[] parts = line.split(" ");
+                String[] parts = line.trim().split("\\s+");
                 if (parts.length < 2) continue;
 
-                String metric = parts[0];
+                String fullMetric = parts[0];
                 double value = Double.parseDouble(parts[1]);
+                String name;
+                String labels = "";
 
-                String name = metric.contains("{")
-                        ? metric.substring(0, metric.indexOf("{"))
-                        : metric;
-
-                String labels = metric.contains("{")
-                        ? metric.substring(metric.indexOf("{") + 1, metric.indexOf("}"))
-                        : "";
-
+                if (fullMetric.contains("{")) {
+                    name = fullMetric.substring(0, fullMetric.indexOf("{"));
+                    labels = fullMetric.substring(fullMetric.indexOf("{") + 1, fullMetric.lastIndexOf("}"));
+                } else {
+                    name = fullMetric;
+                }
                 list.add(new MetricPoint(name, value, labels));
-
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+            }
         }
-
         return list;
     }
 }

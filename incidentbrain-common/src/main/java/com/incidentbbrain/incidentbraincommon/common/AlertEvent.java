@@ -1,13 +1,17 @@
 package com.incidentbbrain.incidentbraincommon.common;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
-@Getter
-@Setter
+import java.io.Serializable;
+
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class AlertEvent {
+public class AlertEvent implements Serializable {
 
     private String alertId;
     private String serviceName;
@@ -15,4 +19,10 @@ public class AlertEvent {
     private String message;
     private String host;
     private String timestamp;
+
+    private String alertType;
+
+    private String source;
+
+    private String reason;
 }

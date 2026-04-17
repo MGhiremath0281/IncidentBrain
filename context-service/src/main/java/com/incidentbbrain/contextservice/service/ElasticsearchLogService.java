@@ -25,25 +25,33 @@ public class ElasticsearchLogService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    public List<String> getLogs(String service, LocalDateTime startedAt) {
+    public List<String> getLogs(String service, LocalDateTime startedAt, String reason) {
         LocalDateTime time = (startedAt != null) ? startedAt : LocalDateTime.now();
 
-        // Looking +/- 2 minutes around the incident
-        String gte = time.minusMinutes(2).toInstant(ZoneOffset.UTC).toString();
+        String gte = time.minusMinutes(5).toInstant(ZoneOffset.UTC).toString();
         String lte = time.plusMinutes(2).toInstant(ZoneOffset.UTC).toString();
+
+        String keywordQuery = switch (reason) {
+            case "DATABASE_EXHAUSTED" -> "hikari OR connection OR database OR sql OR pool OR exhausted";
+            case "HIGH_LATENCY" -> "timeout OR slow OR latency OR duration OR delay OR exception OR error";
+            case "SERVICE_DOWN" -> "error OR crash OR stop OR oom OR fatal OR " + service;
+            default -> "error OR exception OR fail OR stacktrace";
+        };
 
         String query = """
         {
           "query": {
             "bool": {
-              "must": [{ "match": { "service": "%s" } }],
-              "filter": [{ "range": { "@timestamp": { "gte": "%s", "lte": "%s" } } }]
+              "must": [ { "match": { "service": "%s" } } ],
+              "should": [ { "query_string": { "query": "%s" } } ],
+              "filter": [ { "range": { "@timestamp": { "gte": "%s", "lte": "%s" } } } ],
+              "minimum_should_match": 0
             }
           },
           "sort": [{ "@timestamp": "desc" }],
           "size": 50
         }
-        """.formatted(service, gte, lte);
+        """.formatted(service, keywordQuery, gte, lte);
 
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -58,7 +66,7 @@ public class ElasticsearchLogService {
 
             return parseMeaningfulLogs(rawResponse);
         } catch (Exception e) {
-            log.error("Elasticsearch query failed: {}", e.getMessage());
+            log.error("Elasticsearch query failed for reason {}: {}", reason, e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -66,25 +74,29 @@ public class ElasticsearchLogService {
     private List<String> parseMeaningfulLogs(String jsonResponse) {
         List<String> logs = new ArrayList<>();
         try {
-            JsonNode hits = objectMapper.readTree(jsonResponse).path("hits").path("hits");
+            JsonNode root = objectMapper.readTree(jsonResponse);
+            JsonNode hits = root.path("hits").path("hits");
+
+            if (hits.isMissingNode() || hits.isEmpty()) {
+                log.warn("No logs found in Elasticsearch.");
+                return logs;
+            }
+
             for (JsonNode hit : hits) {
                 JsonNode source = hit.path("_source");
-                String level = source.path("level").asText("INFO");
-                String message = source.path("message").asText("");
+                String level = source.path("level").asText("INFO").toUpperCase();
+                String timestamp = source.path("@timestamp").asText("N/A");
+                String rawMessage = source.path("message").asText("");
 
-                if (isCritical(level, message)) {
-                    String formattedLog = String.format("[%s] %s - %s",
-                            source.path("@timestamp").asText("N/A"),
-                            level.toUpperCase(),
-                            message
-                    );
+                // SEPARATED CLEANING LOGIC
+                String cleanMessage = simplifyMessage(rawMessage);
 
-                    if (!logs.contains(formattedLog)) {
-                        logs.add(formattedLog);
-                    }
+                String formattedLog = String.format("[%s] %s - %s", timestamp, level, cleanMessage);
+
+                if (!logs.contains(formattedLog)) {
+                    logs.add(formattedLog);
                 }
 
-                // Keep it focused: 15 meaningful lines is plenty for the "Brain"
                 if (logs.size() >= 15) break;
             }
         } catch (Exception e) {
@@ -93,20 +105,27 @@ public class ElasticsearchLogService {
         return logs;
     }
 
-    private boolean isCritical(String level, String message) {
-        if (message == null || message.isEmpty()) return false;
+    /**
+     * Helper to extract core error details and separate them from system noise.
+     */
+    private String simplifyMessage(String message) {
+        if (message == null || message.isEmpty()) return "No content";
 
-        String msg = message.toLowerCase();
-        String lvl = level.toUpperCase();
+        // Logic 1: Extract Exception within brackets (Spring's default error format)
+        if (message.contains("exception [")) {
+            int start = message.indexOf("exception [") + 11;
+            int end = message.indexOf("]", start);
+            if (end > start) {
+                return "CORE_ERROR: " + message.substring(start, end);
+            }
+        }
 
-        return lvl.equals("ERROR") ||
-                lvl.equals("WARN") ||
-                lvl.equals("FATAL") ||
-                msg.contains("exception") ||
-                msg.contains("cause") ||
-                msg.contains("failed") ||
-                msg.contains("timeout") ||
-                msg.contains("denied") ||
-                msg.contains("error"); // Catches errors buried in INFO messages
+        // Logic 2: Handle specific application business logs
+        if (message.contains("Creating user")) return message;
+        if (message.contains("Deleting user")) return message;
+        if (message.contains("failure")) return "APP_FAILURE: " + message;
+
+        // Logic 3: Truncate everything else if it's too long
+        return (message.length() > 120) ? message.substring(0, 117) + "..." : message;
     }
 }

@@ -1,11 +1,9 @@
 package com.incidentbbrain.alertservice.model;
 
-
 import com.incidentbbrain.alertservice.enums.AlertStatus;
 import com.incidentbbrain.alertservice.enums.Severity;
 import jakarta.persistence.*;
 import lombok.*;
-
 import java.time.Instant;
 import java.util.UUID;
 
@@ -31,7 +29,9 @@ public class Alert {
 
     private String host;
 
-    private String source;
+    private String alertType;   // INFRA | APPLICATION
+    private String source;      // PROMETHEUS | LOGS | ACTUATOR
+    private String reason;      // SERVICE_DOWN | HIGH_LATENCY | ERROR_RATE
 
     @Enumerated(EnumType.STRING)
     private AlertStatus status;
