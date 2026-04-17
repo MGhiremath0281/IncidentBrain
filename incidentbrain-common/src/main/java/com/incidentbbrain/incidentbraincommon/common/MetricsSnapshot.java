@@ -1,4 +1,4 @@
-package com.incidentbbrain.contextservice.dto;
+package com.incidentbbrain.incidentbraincommon.common;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.*;

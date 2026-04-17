@@ -1,13 +1,13 @@
 services:
 
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0
+    image: confluentinc/cp-zookeeper:latest
     container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
 
   kafka:
-    image: confluentinc/cp-kafka:7.4.0
+    image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
     depends_on:
       - zookeeper
@@ -20,8 +20,9 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
 
+  # UPDATED: Switched to pgvector
   postgres:
-    image: postgres:15
+    image: ankane/pgvector:latest
     container_name: incident-postgres
     restart: always
     ports:
@@ -35,6 +36,13 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
 
+  # NEW: Added Redis Cache
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
     container_name: elasticsearch
@@ -44,7 +52,6 @@ services:
       - ES_JAVA_OPTS=-Xms1g -Xmx1g
     ports:
       - "9200:9200"
-    # FIX: healthcheck so dependents wait until ES is truly ready
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
@@ -74,7 +81,6 @@ services:
       - "5044:5044"
     volumes:
       - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
-    # FIX: healthcheck so testing-service waits until port 5000 is accepting connections
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/5000' 2>/dev/null || exit 1"]
       interval: 10s
@@ -89,14 +95,20 @@ services:
     container_name: testing-service
     ports:
       - "8084:8084"
-    # FIX: now waits for logstash to be healthy (port 5000 open), not just started
     depends_on:
       logstash:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_started
     environment:
       - JAVA_TOOL_OPTIONS=-Dsun.net.inetaddr.ttl=0
+      - GEMINI_API_KEY=${GEMINI_API_KEY} # Passed from your .env file
+      - SPRING_REDIS_HOST=redis
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 
 volumes:
   pgdata:

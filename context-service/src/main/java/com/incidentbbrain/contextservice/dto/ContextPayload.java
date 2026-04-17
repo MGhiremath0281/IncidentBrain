@@ -22,6 +22,6 @@ public class ContextPayload {
     private LocalDateTime incidentStartedAt;
     private LocalDateTime resolvedAt;
     private List<String> logs;
-    private MetricsSnapshot metricsSnapshot;
+    private com.incidentbbrain.incidentbraincommon.common.MetricsSnapshot metricsSnapshot;
     private LocalDateTime enrichedAt;
 }
