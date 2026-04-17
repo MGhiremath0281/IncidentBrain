@@ -24,58 +24,47 @@ public class AlertService {
     private final AlertKafkaProducer producer;
 
     public AlertResponse ingest(AlertRequest req) {
-        log.info("Ingesting new alert from host: {} for service: {}", req.getHost(), req.getServiceName());
+        log.info("Ingesting new {} alert for service: {} (Reason: {})",
+                req.getAlertType(), req.getServiceName(), req.getReason());
 
         Alert alert = Alert.builder()
                 .serviceName(req.getServiceName())
                 .severity(req.getSeverity())
                 .message(req.getMessage())
                 .host(req.getHost())
-                .source("manual")
+                .alertType(req.getAlertType())
+                .source(req.getSource() != null ? req.getSource() : "manual")
+                .reason(req.getReason())
+                .status(AlertStatus.OPEN)
                 .build();
 
         Alert saved = repo.save(alert);
-        log.debug("Alert saved to database with ID: {}", saved.getId());
+        log.debug("Alert saved with ID: {}", saved.getId());
 
+        // Publish enriched event to Kafka
         producer.publish(saved);
 
         return map(saved);
     }
 
     public AlertResponse get(UUID id) {
-        log.debug("Fetching alert details for ID: {}", id);
         Alert alert = repo.findById(id)
-                .orElseThrow(() -> {
-                    log.error("Alert not found for ID: {}", id);
-                    return new RuntimeException("Alert not found");
-                });
+                .orElseThrow(() -> new RuntimeException("Alert not found"));
         return map(alert);
     }
 
     public Page<AlertResponse> search(String service, Severity severity, Pageable pageable) {
-        log.info("Searching alerts for service: {} and severity: {}", service, severity);
-        return repo.findByServiceNameAndSeverity(service, severity, pageable)
-                .map(this::map);
+        return repo.findByServiceNameAndSeverity(service, severity, pageable).map(this::map);
     }
 
     public AlertResponse updateStatus(UUID id, AlertStatus status) {
-        log.info("Updating status for alert ID: {} to {}", id, status);
-
         Alert alert = repo.findById(id)
-                .orElseThrow(() -> {
-                    log.error("Update failed: Alert ID {} not found", id);
-                    return new RuntimeException("Alert not found");
-                });
-
-        AlertStatus oldStatus = alert.getStatus();
+                .orElseThrow(() -> new RuntimeException("Alert not found"));
         alert.setStatus(status);
-        Alert updated = repo.save(alert);
-
-        log.info("Alert ID {} status changed from {} to {}", id, oldStatus, status);
-        return map(updated);
+        return map(repo.save(alert));
     }
+
     public Page<AlertResponse> findAll(Pageable pageable) {
-        log.info("Fetching all alerts");
         return repo.findAll(pageable).map(this::map);
     }
 
