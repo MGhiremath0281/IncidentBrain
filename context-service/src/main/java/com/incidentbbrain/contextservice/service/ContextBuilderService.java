@@ -1,7 +1,7 @@
 package com.incidentbbrain.contextservice.service;
 
 import com.incidentbbrain.contextservice.dto.ContextPayload;
-import com.incidentbbrain.contextservice.dto.MetricsSnapshot;
+import com.incidentbbrain.incidentbraincommon.common.MetricsSnapshot;
 import com.incidentbbrain.contextservice.entity.EnrichedIncident;
 import com.incidentbbrain.contextservice.repository.IncidentRepository;
 import com.incidentbbrain.incidentbraincommon.common.IncidentEvent;
