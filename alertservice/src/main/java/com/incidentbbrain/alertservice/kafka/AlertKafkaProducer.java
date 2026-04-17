@@ -17,8 +17,8 @@ public class AlertKafkaProducer {
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
     public void publish(Alert alert) {
-        log.info("Preparing to publish alert event for service: {} with severity: {}",
-                alert.getServiceName(), alert.getSeverity());
+        log.info("Preparing to publish enriched alert event for service: {} | Reason: {}",
+                alert.getServiceName(), alert.getReason());
 
         AlertEvent event = AlertEvent.builder()
                 .alertId(alert.getId().toString())
@@ -27,13 +27,16 @@ public class AlertKafkaProducer {
                 .message(alert.getMessage())
                 .host(alert.getHost())
                 .timestamp(Instant.now().toString())
+                .alertType(alert.getAlertType())
+                .source(alert.getSource())
+                .reason(alert.getReason())
                 .build();
 
         try {
             kafkaTemplate.send("alerts.raw", alert.getServiceName(), event);
-            log.info("Successfully sent alert event to Kafka topic 'alerts.raw' for Alert ID: {}", alert.getId());
+            log.info("Successfully sent enriched event to Kafka for Alert ID: {}", alert.getId());
         } catch (Exception e) {
-            log.error("Failed to publish alert event to Kafka for Alert ID: {}. Error: {}",
+            log.error("Failed to publish alert event for Alert ID: {}. Error: {}",
                     alert.getId(), e.getMessage(), e);
         }
     }
