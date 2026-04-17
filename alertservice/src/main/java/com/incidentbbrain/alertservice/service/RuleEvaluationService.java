@@ -18,18 +18,23 @@ public class RuleEvaluationService {
 
     private final Map<String, Instant> activeAlerts = new ConcurrentHashMap<>();
     private static final Duration REPEAT_INTERVAL = Duration.ofMinutes(5);
-    private static final double LATENCY_THRESHOLD = 0.006; // 6ms for testing change to 0.5 to production
+    private static final double LATENCY_THRESHOLD = 0.006;
 
     public AlertRequest evaluate(List<MetricPoint> metrics) {
         String serviceName = "testing-service";
 
         double sumTime = 0, countRequests = 0;
-        double activeConns = -1, maxConns = -1;
+        double activeConns = 0, maxConns = 0;
+        boolean upMetricPresent = false;
         boolean isUp = true;
 
+        // 1. Collect all metrics from the list
         for (MetricPoint m : metrics) {
             switch (m.getName()) {
-                case "up" -> isUp = (m.getValue() == 1.0);
+                case "up" -> {
+                    isUp = (m.getValue() == 1.0);
+                    upMetricPresent = true;
+                }
                 case "http_server_requests_seconds_sum" -> sumTime = m.getValue();
                 case "http_server_requests_seconds_count" -> countRequests = m.getValue();
                 case "hikaricp_connections_active" -> activeConns = m.getValue();
@@ -37,62 +42,58 @@ public class RuleEvaluationService {
             }
         }
 
-        // --- RULE 1: SERVICE DOWN ---
-        if (!isUp) {
-            return processStatefulAlert(serviceName, "SERVICE_DOWN",
-                    "CRITICAL: Service is unreachable", Severity.CRITICAL);
+        // --- RULE 1: SERVICE DOWN (Only if metric is actually present) ---
+        if (upMetricPresent && !isUp) {
+            return processStatefulAlert(serviceName, "SERVICE_DOWN", "Critical: Service is unreachable", Severity.CRITICAL);
         }
 
-        // --- RULE 2: DATABASE EXHAUSTION (The "Resume Flex") ---
-        // Alert if active connections reach 90% of the pool maximum
+        // --- RULE 2: DATABASE EXHAUSTION ---
+        // Using your metrics: activeConns=0.0, maxConns=10.0
         if (maxConns > 0 && (activeConns / maxConns) >= 0.9) {
             return processStatefulAlert(serviceName, "DATABASE_EXHAUSTED",
-                    String.format("DB Pool bottleneck: %.0f/%.0f connections in use", activeConns, maxConns),
-                    Severity.HIGH);
+                    String.format("DB Pool nearly full: %.0f/%.0f", activeConns, maxConns), Severity.HIGH);
         }
 
-        // --- RULE 3: HIGH LATENCY ---
+        // --- RULE 3: HIGH LATENCY (Your working logic) ---
         double avgLatency = (countRequests > 0) ? (sumTime / countRequests) : 0;
         String latencyKey = serviceName + "_HIGH_LATENCY";
 
         if (avgLatency > LATENCY_THRESHOLD) {
             return processStatefulAlert(serviceName, "HIGH_LATENCY",
-                    String.format("Latency: %.4f s", avgLatency), Severity.MEDIUM);
+                    String.format("Latency breached: %.4f s", avgLatency), Severity.MEDIUM);
         } else if (avgLatency > 0) {
-            // Recovery logic
             if (activeAlerts.remove(latencyKey) != null) {
-                log.info("RECOVERY: {} latency normalized to {}s", serviceName, String.format("%.4f", avgLatency));
+                log.info("RECOVERY: Latency for {} returned to normal", serviceName);
             }
         }
 
         return null;
     }
 
-    private AlertRequest processStatefulAlert(String service, String reason, String message, Severity severity) {
-        String alertKey = service + "_" + reason;
+    private AlertRequest processStatefulAlert(String service, String reason, String message, Severity sev) {
+        String key = service + "_" + reason;
         Instant now = Instant.now();
-        Instant lastDetected = activeAlerts.get(alertKey);
+        Instant firstDetected = activeAlerts.get(key);
 
-        if (lastDetected == null) {
-            // New alert
-            activeAlerts.put(alertKey, now);
-            log.info("STATE CHANGE: New Alert [{}] for {}", reason, service);
-            return buildRequest(service, reason, message, severity);
+        if (firstDetected == null) {
+            activeAlerts.put(key, now);
+            log.info("STATE CHANGE: {} {} detected", service, reason);
+            return buildRequest(service, reason, message, sev);
         }
 
-        if (Duration.between(lastDetected, now).compareTo(REPEAT_INTERVAL) >= 0) {
-            activeAlerts.put(alertKey, now);
-            log.warn("REMINDER: Alert [{}] still active for {}", reason, service);
-            return buildRequest(service, reason, "STILL ACTIVE: " + message, severity);
+        // Re-alert after 5 minutes (Your working reminder logic)
+        if (Duration.between(firstDetected, now).toMinutes() >= 5) {
+            activeAlerts.put(key, now); // Reset timer
+            return buildRequest(service, reason, "STILL ACTIVE: " + message, sev);
         }
 
-        return null; // Silent period
+        return null;
     }
 
-    private AlertRequest buildRequest(String service, String reason, String message, Severity severity) {
+    private AlertRequest buildRequest(String service, String reason, String message, Severity sev) {
         return AlertRequest.builder()
                 .serviceName(service)
-                .severity(severity)
+                .severity(sev)
                 .alertType("APPLICATION")
                 .reason(reason)
                 .source("PROMETHEUS")
