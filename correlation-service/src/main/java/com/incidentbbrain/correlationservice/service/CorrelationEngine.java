@@ -22,54 +22,58 @@ public class CorrelationEngine {
     private final IncidentService incidentService;
     private final IncidentProducer producer;
 
+    // The key is now "serviceName:reason" (e.g., "testing-service:HIGH_LATENCY")
     private final Map<String, List<AlertEvent>> windowMap = new ConcurrentHashMap<>();
     private final Map<String, Object> locks = new ConcurrentHashMap<>();
 
     public void process(AlertEvent alert) {
+        // Step 1: Create a unique grouping key based on service AND reason
+        String groupKey = alert.getServiceName() + ":" + alert.getReason();
 
-        String service = alert.getServiceName();
+        locks.putIfAbsent(groupKey, new Object());
 
-        locks.putIfAbsent(service, new Object());
-
-        synchronized (locks.get(service)) {
-
+        synchronized (locks.get(groupKey)) {
             windowMap
-                    .computeIfAbsent(service, k -> new ArrayList<>())
+                    .computeIfAbsent(groupKey, k -> new ArrayList<>())
                     .add(alert);
 
-            log.info("[ENGINE] Added alert service={} count={}",
-                    service, windowMap.get(service).size());
+            log.info("[ENGINE] Added alert to group={} total_in_window={}",
+                    groupKey, windowMap.get(groupKey).size());
         }
 
-        flushIfNeeded(service);
+        flushIfNeeded(groupKey);
     }
 
-    private void flushIfNeeded(String service) {
-
-        Object lock = locks.get(service);
+    private void flushIfNeeded(String groupKey) {
+        Object lock = locks.get(groupKey);
         if (lock == null) return;
 
         synchronized (lock) {
-
-            List<AlertEvent> alerts = windowMap.get(service);
+            List<AlertEvent> alerts = windowMap.get(groupKey);
 
             if (alerts == null || alerts.isEmpty()) return;
 
+            // Flush if we have at least 2 alerts OR the window time has expired
             if (alerts.size() < 2 && !isWindowExpired(alerts)) {
                 return;
             }
 
             List<AlertEvent> toProcess = new ArrayList<>(alerts);
-            windowMap.put(service, new ArrayList<>());
+            windowMap.put(groupKey, new ArrayList<>());
 
-            log.info("[ENGINE] Flushing {} alerts for service={}",
-                    toProcess.size(), service);
+            log.info("[ENGINE] Flushing {} alerts for group={}",
+                    toProcess.size(), groupKey);
 
-            Incident incident = incidentService.createIncident(service, toProcess);
+            // Extract the original service name from the key
+            String serviceName = groupKey.split(":")[0];
 
+            // Step 2: Create the incident with the grouped alerts
+            Incident incident = incidentService.createIncident(serviceName, toProcess);
+
+            // Step 3: Build the event for Kafka
             IncidentEvent event = IncidentEvent.builder()
                     .id(incident.getId())
-                    .service(service)
+                    .service(serviceName)
                     .severity(incident.getSeverity())
                     .status(incident.getStatus())
                     .alertIds(incident.getAlertIds())
@@ -83,7 +87,6 @@ public class CorrelationEngine {
     }
 
     private boolean isWindowExpired(List<AlertEvent> alerts) {
-
         if (alerts == null || alerts.isEmpty()) return false;
 
         Object rawTimestamp = alerts.get(0).getTimestamp();
@@ -98,18 +101,17 @@ public class CorrelationEngine {
             first = (LocalDateTime) rawTimestamp;
         }
 
-        return first.plusMinutes(5).isBefore(LocalDateTime.now());
+        // Set to 2 minutes for testing, usually 5 in prod
+        return first.plusMinutes(2).isBefore(LocalDateTime.now());
     }
 
     @Scheduled(fixedRate = 60000)
     public void scheduledFlush() {
+        log.info("[SCHEDULER] Checking all windows for expiration...");
+        Set<String> keys = new HashSet<>(windowMap.keySet());
 
-        log.info("[SCHEDULER] Running window flush check...");
-
-        Set<String> services = new HashSet<>(windowMap.keySet());
-
-        for (String service : services) {
-            flushIfNeeded(service);
+        for (String key : keys) {
+            flushIfNeeded(key);
         }
     }
 }
