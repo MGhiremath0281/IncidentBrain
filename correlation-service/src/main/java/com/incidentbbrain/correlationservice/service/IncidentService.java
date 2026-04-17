@@ -21,8 +21,10 @@ public class IncidentService {
     private final IncidentRepository repository;
 
     public Incident createIncident(String service, List<AlertEvent> alerts) {
-        // Ensure we capture the start time immediately
         LocalDateTime now = LocalDateTime.now();
+
+        // Get the reason from the first alert to make the title descriptive
+        String reason = alerts.isEmpty() ? "GENERIC_ISSUE" : alerts.get(0).getReason();
 
         Incident incident = Incident.builder()
                 .affectedService(service)
@@ -30,15 +32,15 @@ public class IncidentService {
                 .alertIds(alerts.stream()
                         .map(alert -> UUID.fromString(alert.getAlertId()))
                         .toList())
-                .title("Incident in " + service)
+                .title(reason + " detected in " + service) // Result: "HIGH_LATENCY detected in testing-service"
                 .status("OPEN")
-                .startedAt(now) // Crucial: This populates the field for Kafka
+                .startedAt(now)
                 .build();
 
         Incident saved = repository.save(incident);
 
-        log.info("[SERVICE] Incident created id={} service={} startedAt={}",
-                saved.getId(), service, now);
+        log.info("[SERVICE] Incident created id={} title='{}' service={}",
+                saved.getId(), saved.getTitle(), service);
 
         return saved;
     }
@@ -48,7 +50,6 @@ public class IncidentService {
                 .orElseThrow(() -> new RuntimeException("Incident not found with ID: " + id));
 
         incident.setStatus("RESOLVED");
-        // Fallback to now if resolvedAt is null
         incident.setResolvedAt(resolvedAt != null ? resolvedAt : LocalDateTime.now());
 
         log.info("[SERVICE] Incident resolved id={} at {}", id, incident.getResolvedAt());
@@ -67,7 +68,6 @@ public class IncidentService {
         return alerts.stream()
                 .map(alert -> {
                     try {
-                        // Check if severity is already an Enum or a String
                         return Severity.valueOf(alert.getSeverity().toUpperCase());
                     } catch (Exception e) {
                         log.warn("Unknown severity '{}', defaulting to LOW", alert.getSeverity());
