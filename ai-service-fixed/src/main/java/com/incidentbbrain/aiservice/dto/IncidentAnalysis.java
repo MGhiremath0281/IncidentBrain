@@ -2,6 +2,7 @@ package com.incidentbbrain.aiservice.dto;
 
 import java.util.List;
 
+
 public record IncidentAnalysis(
         String rootCause,
         double confidenceScore,

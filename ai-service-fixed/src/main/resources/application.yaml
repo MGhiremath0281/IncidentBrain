@@ -15,10 +15,10 @@ spring:
   ai:
     google:
       genai:
-        api-key: "AIzaSyAe7p93LNbstjLnPS7qF4POWGFH3QAP0Zg"
+        api-key: ${GEMINI_API_KEY}
         chat:
           options:
-            model: gemini-2.5-flash # Upgraded for better reasoning
+            model: gemini-2.5-flash
 
   kafka:
     bootstrap-servers: localhost:9092
