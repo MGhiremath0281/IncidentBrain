@@ -1,6 +1,6 @@
 package com.incidentbbrain.aiservice.engine;
 
-import com.incidentbbrain.aiservice.dto.IncidentAnalysis;
+import com.incidentbbrain.aiservice.entity.IncidentAnalysis; // Updated import
 import com.incidentbbrain.incidentbraincommon.common.MetricsSnapshot;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -29,7 +29,6 @@ public class AnalysisEngine {
                 : "No logs available.";
 
         try {
-            // SINGLE REQUEST CALL
             return chatClient.prompt()
                     .user(u -> u.text("""
                             Role: Senior SRE & Forensic Analyst
@@ -39,7 +38,7 @@ public class AnalysisEngine {
                             Logs:
                             {logs}
                             
-                            Requirement: Return ONLY a valid JSON mapping to IncidentAnalysis.
+                            Requirement: Return a valid JSON object matching the IncidentAnalysis entity.
                             """)
                             .param("service", service)
                             .param("cpu", metrics.getSystemCpuUsage())
@@ -53,14 +52,14 @@ public class AnalysisEngine {
         } catch (Exception e) {
             log.error("Gemini API call failed: {}", e.getMessage());
 
-            // Fallback object prevents the Kafka Consumer from crashing on 429 Quota errors
-            return new IncidentAnalysis(
-                    "Analysis paused: " + e.getMessage(),
-                    0.0,
-                    List.of("Check system logs manually", "Wait for API quota reset"),
-                    "AI Quota Reached",
-                    service
-            );
+            // Updated fallback using the @Builder we added to the Entity
+            return IncidentAnalysis.builder()
+                    .rootCause("Analysis paused: " + e.getMessage())
+                    .confidenceScore(0.0)
+                    .suggestedActions(List.of("Check system logs manually", "Wait for API quota reset"))
+                    .summary("AI service encountered an error or quota limit.")
+                    .suspectedComponent(service)
+                    .build();
         }
     }
 }
