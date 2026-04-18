@@ -2,7 +2,7 @@ package com.incidentbbrain.contextservice.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.incidentbbrain.contextservice.config.DynamicEndpointRegistry;
-import com.incidentbbrain.contextservice.dto.MetricsSnapshot;
+import com.incidentbbrain.incidentbraincommon.common.MetricsSnapshot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

@@ -1,6 +1,6 @@
 package com.incidentbbrain.contextservice.entity;
 
-import com.incidentbbrain.contextservice.dto.MetricsSnapshot;
+import com.incidentbbrain.incidentbraincommon.common.MetricsSnapshot;
 import com.incidentbbrain.incidentbraincommon.common.Severity;
 import jakarta.persistence.*;
 import lombok.*;
