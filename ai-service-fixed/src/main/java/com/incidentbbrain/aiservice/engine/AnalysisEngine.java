@@ -22,53 +22,45 @@ public class AnalysisEngine {
                                     List<String> logs,
                                     MetricsSnapshot metrics) {
 
-        log.info("Starting AI analysis for service: {}", service);
+        log.info("Starting AI forensic analysis for service: {}", service);
 
         String logContext = (logs != null && !logs.isEmpty())
                 ? String.join("\n", logs)
-                : "No logs provided";
-
-        // RAG DISABLED (no past data / no embeddings available)
-        String historicalContext = "No historical data available yet.";
+                : "No logs available.";
 
         try {
+            // SINGLE REQUEST CALL
             return chatClient.prompt()
                     .user(u -> u.text("""
-                        System: IncidentBrain AI Forensic Analyst
-                        Task: Analyze the incident and provide root cause.
-
-                        Service: {service}
-
-                        Metrics Vital Signs:
-                        - CPU Usage: {cpu}%
-                        - JVM Memory: {mem}MB
-                        - HTTP Requests: {http}
-                        - Health Status: {health}
-
-                        Current Logs:
-                        {logs}
-
-                        Relevant Past Resolutions (RAG):
-                        {history}
-
-                        Requirement:
-                        1. Diagnose the Root Cause.
-                        2. Provide specific remediation steps.
-                        3. Return response in valid JSON format mapping to IncidentAnalysis.
-                        """)
+                            Role: Senior SRE & Forensic Analyst
+                            Task: Analyze the incident for {service} and return a structured JSON report.
+                            
+                            Metrics: CPU {cpu}%, JVM {mem} bytes, Requests {http}, Health {health}
+                            Logs:
+                            {logs}
+                            
+                            Requirement: Return ONLY a valid JSON mapping to IncidentAnalysis.
+                            """)
                             .param("service", service)
                             .param("cpu", metrics.getSystemCpuUsage())
                             .param("mem", metrics.getJvmMemoryUsed())
                             .param("http", metrics.getHttpRequests())
                             .param("health", metrics.getHealthStatus())
-                            .param("logs", logContext)
-                            .param("history", historicalContext))
+                            .param("logs", logContext))
                     .call()
                     .entity(IncidentAnalysis.class);
 
         } catch (Exception e) {
-            log.error("Gemini analysis failed: {}", e.getMessage(), e);
-            throw new RuntimeException("AI Analysis failed to generate report", e);
+            log.error("Gemini API call failed: {}", e.getMessage());
+
+            // Fallback object prevents the Kafka Consumer from crashing on 429 Quota errors
+            return new IncidentAnalysis(
+                    "Analysis paused: " + e.getMessage(),
+                    0.0,
+                    List.of("Check system logs manually", "Wait for API quota reset"),
+                    "AI Quota Reached",
+                    service
+            );
         }
     }
 }
