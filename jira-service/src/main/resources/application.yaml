@@ -1,3 +1,31 @@
+server:
+  port: 8081
+
 spring:
   application:
     name: jira-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/jira_db
+    username: postgres
+    password: secret
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: jira-orchestrator-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.incidentbrain.jiraservice.dto"
+
+jira:
+  base-url: https://incidentbrain.atlassian.net
+  user-email: ${JIRA_USER_EMAIL}
+  api-token: ${JIRA_API_TOKEN}
+  project-key: ${JIRA_PROJECT_KEY:KAN}
