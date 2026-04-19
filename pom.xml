@@ -12,6 +12,7 @@
         <module>microservices/testing-service</module>
         <module>ai/ai-service-fixed</module>
         <module>infrastructure/eurekaserver</module>
+        <module>infrastructure/config-service</module>
         <module>shared/incidentbrain-common</module>
     </modules>
 </project>

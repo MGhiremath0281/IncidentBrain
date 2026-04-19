@@ -1,54 +1,6 @@
-server:
-  port: 8083
-
 spring:
   application:
     name: context-service
 
-  # Fix for readable dates in JSON output
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
-
-  datasource:
-    url: jdbc:postgresql://localhost:5432/incident_db
-    username: postgres
-    password: secret
-    hikari:
-      connection-init-sql: "SET TIME ZONE 'UTC'"
-
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: false
-
-  kafka:
-    bootstrap-servers: localhost:9092
-    consumer:
-      group-id: context-group
-      auto-offset-reset: earliest
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "*"
-        spring.json.use.type.headers: false
-        spring.json.value.default.type: com.incidentbbrain.incidentbraincommon.common.IncidentEvent
-
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      properties:
-        spring.json.add.type.headers: false
-
-context:
-  kafka:
-    topics:
-      incidents-created: incidents.created
-      context-ready: context.ready
-
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
-  instance:
-    prefer-ip-address: true
+  config:
+    import: optional:configserver:http://localhost:8888
