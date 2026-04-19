@@ -16,8 +16,10 @@ import java.util.Map;
 public class KafkaConfig {
     @Bean
     public ConsumerFactory<String, AnalysisEvent> consumerFactory(KafkaProperties props) {
-        JsonDeserializer<AnalysisEvent> jsonDeserializer = new JsonDeserializer<>(AnalysisEvent.class);
-        jsonDeserializer.addTrustedPackages("com.incidentbbrain.jiraservice.dto");
+        JsonDeserializer<AnalysisEvent> jsonDeserializer = new JsonDeserializer<>(AnalysisEvent.class, false);
+        jsonDeserializer.addTrustedPackages("*");
+
+        jsonDeserializer.setUseTypeMapperForKey(false);
 
         return new DefaultKafkaConsumerFactory<>(
                 props.buildConsumerProperties(null),
