@@ -1,40 +1,6 @@
-server:
-  port: 8089
-
 spring:
   application:
     name: jira-service
 
-  datasource:
-    url: jdbc:postgresql://localhost:5432/jira_db
-    username: postgres
-    password: secret
-
-  jpa:
-    hibernate:
-      ddl-auto: update
-
-  kafka:
-    bootstrap-servers: localhost:9092
-    consumer:
-      group-id: jira-orchestrator-group
-      auto-offset-reset: earliest
-
-  cloud:
-    eureka:
-      client:
-        service-url:
-          defaultZone: http://localhost:8761/eureka/
-        register-with-eureka: true
-        fetch-registry: true
-
-  eureka:
-    instance:
-      prefer-ip-address: true
-      instance-id: ${spring.application.name}:${random.uuid}
-
-jira:
-  base-url: https://incidentbrain.atlassian.net
-  user-email: ${JIRA_USER_EMAIL}
-  api-token: ${JIRA_API_TOKEN}
-  project-key: ${JIRA_PROJECT_KEY:KAN}
+  config:
+    import: optional:configserver:http://localhost:8888
