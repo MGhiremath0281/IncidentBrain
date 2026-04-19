@@ -6,7 +6,7 @@ spring:
     name: jira-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/aiservice_db
+    url: jdbc:postgresql://localhost:5432/jira_db
     username: postgres
     password: secret
 
