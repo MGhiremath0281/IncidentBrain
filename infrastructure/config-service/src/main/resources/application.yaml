@@ -7,7 +7,8 @@ spring:
     config:
       server:
         native:
-          search-locations: classpath:/config
+          # Use the absolute path to your config folder
+          search-locations: file:///C:/Users/Mahesh Yadav/Desktop/IncidentBrain/infrastructure/config-service/src/main/resources/config/
 
 server:
   port: 8888
