@@ -15,7 +15,11 @@ import org.springframework.stereotype.Component;
 public class IncidentConsumer {
     private final JiraOrchestrator orchestrator;
 
-    @KafkaListener(topics = "analysis.completed", groupId = "jira-orchestrator-group")
+    @KafkaListener(
+            topics = "analysis.completed",
+            groupId = "jira-orchestrator-group",
+            containerFactory = "kafkaListenerContainerFactory"
+    )
     public void listen(AnalysisEvent event) {
         log.info("Received event for Incident: {}", event.getId());
         orchestrator.processIncident(event);
