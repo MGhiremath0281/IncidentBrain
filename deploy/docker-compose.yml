@@ -34,7 +34,7 @@ services:
       PGTZ: UTC
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../database/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   # NEW: Added Redis Cache
   redis:
@@ -80,7 +80,7 @@ services:
       - "5000:5000"
       - "5044:5044"
     volumes:
-      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ../logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/5000' 2>/dev/null || exit 1"]
       interval: 10s
@@ -90,7 +90,7 @@ services:
 
   testing-service:
     build:
-      context: ./testing-service
+      context: ../microservices/testing-service
       dockerfile: Dockerfile
     container_name: testing-service
     ports:

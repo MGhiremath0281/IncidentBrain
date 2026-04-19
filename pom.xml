@@ -1,0 +1,17 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.incidentbrain</groupId>
+    <artifactId>incidentbrain-parent</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <modules>
+        <module>microservices/alertservice</module>
+        <module>microservices/context-service</module>
+        <module>microservices/correlation-service</module>
+        <module>microservices/jira-service</module>
+        <module>microservices/testing-service</module>
+        <module>ai/ai-service-fixed</module>
+        <module>infrastructure/eurekaserver</module>
+        <module>shared/incidentbrain-common</module>
+    </modules>
+</project>
