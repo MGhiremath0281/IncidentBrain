@@ -7,6 +7,11 @@ import lombok.Setter;
 @Component
 @Getter @Setter
 public class DynamicEndpointRegistry {
-    private String elasticsearchUrl = "http://localhost:9200/incidentbrain-logs-*/_search";
-    private String actuatorTemplate = "http://localhost:8084/actuator";
+    private String elasticsearchUrl;
+    private String actuatorTemplate;
+
+    public boolean isConfigured() {
+        return elasticsearchUrl != null && !elasticsearchUrl.isBlank() &&
+                actuatorTemplate != null && !actuatorTemplate.isBlank();
+    }
 }
