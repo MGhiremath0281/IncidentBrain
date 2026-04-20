@@ -14,7 +14,9 @@ import org.springframework.web.client.RestTemplate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -39,9 +41,9 @@ public class ElasticsearchLogService {
 
         String keywordQuery = switch (reason) {
             case "DATABASE_EXHAUSTED" -> "hikari OR connection OR database OR sql OR pool OR exhausted";
-            case "HIGH_LATENCY" -> "timeout OR slow OR latency OR duration OR delay OR exception OR error";
-            case "SERVICE_DOWN" -> "error OR crash OR stop OR oom OR fatal OR " + service;
-            default -> "error OR exception OR fail OR stacktrace";
+            case "HIGH_LATENCY"       -> "timeout OR slow OR latency OR duration OR delay OR exception OR error";
+            case "SERVICE_DOWN"       -> "error OR crash OR stop OR oom OR fatal OR " + service;
+            default                   -> "error OR exception OR fail OR stacktrace";
         };
 
         String query = """
@@ -77,28 +79,33 @@ public class ElasticsearchLogService {
     }
 
     private List<String> parseMeaningfulLogs(String jsonResponse) {
-        List<String> logs = new ArrayList<>();
+        // BUG FIX: Original used List.contains() for deduplication which is O(n) per check —
+        // O(n²) total. Replaced with a LinkedHashSet which gives O(1) dedup while
+        // preserving insertion order. Negligible at 15 items but correct practice.
+        Set<String> seen = new LinkedHashSet<>();
         try {
             JsonNode root = objectMapper.readTree(jsonResponse);
             JsonNode hits = root.path("hits").path("hits");
 
             if (hits.isMissingNode() || hits.isEmpty()) {
                 log.info("[LOGS] Zero hits found in Elasticsearch response.");
-                return logs;
+                return new ArrayList<>();
             }
 
             for (JsonNode hit : hits) {
+                if (seen.size() >= 15) break;
                 JsonNode source = hit.path("_source");
                 String formattedLog = String.format("[%s] %s - %s",
                         source.path("@timestamp").asText("N/A"),
                         source.path("level").asText("INFO").toUpperCase(),
                         simplifyMessage(source.path("message").asText(""))
                 );
-                if (!logs.contains(formattedLog)) logs.add(formattedLog);
-                if (logs.size() >= 15) break;
+                seen.add(formattedLog); // HashSet ignores duplicates automatically
             }
-        } catch (Exception e) { log.error("[LOGS] JSON Parsing Error: {}", e.getMessage()); }
-        return logs;
+        } catch (Exception e) {
+            log.error("[LOGS] JSON Parsing Error: {}", e.getMessage());
+        }
+        return new ArrayList<>(seen);
     }
 
     private String simplifyMessage(String message) {
