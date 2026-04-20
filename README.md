@@ -1,21 +1,20 @@
-# IncidentBrain
+# IncidentBrain: Event-Driven Incident Detection & LLM-Assisted Jira Auto-Ticketing System
 
-AI-powered incident management platform built on Spring Boot microservices. IncidentBrain automatically ingests alerts, correlates them into incidents, enriches each incident with logs and deployment context, generates root cause analysis using an LLM, and produces structured postmortems — all in real time through an event-driven pipeline.
+AI-powered incident management platform built on Spring Boot microservices. IncidentBrain automatically ingests Prometheus alerts, correlates them into incidents, enriches each incident with logs and deployment context, generates root cause analysis using an LLM, creates Jira tickets, and produces structured postmortems — all in real time through an event-driven Kafka pipeline.
 
 ---
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Architecture](#architecture)
+- [System Design](#system-design)
+- [Project Structure](#project-structure)
 - [Technology Stack](#technology-stack)
 - [Microservices](#microservices)
-- [Kafka Event Flow](#kafka-event-flow)
-- [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
+- [Initial Configuration](#initial-configuration)
 - [Configuration Reference](#configuration-reference)
 - [API Reference](#api-reference)
-- [Development Roadmap](#development-roadmap)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -25,68 +24,25 @@ AI-powered incident management platform built on Spring Boot microservices. Inci
 
 Modern engineering teams deal with a flood of alerts during incidents. Triaging, correlating, and writing postmortems is slow, manual, and error-prone. IncidentBrain solves this by building a fully automated pipeline:
 
-1. Alerts arrive via REST and are published to Kafka
-2. The Correlation Service groups related alerts into incidents using a sliding time window
-3. The Context Service enriches each incident with relevant logs from Elasticsearch
-4. The AI Service (Python/FastAPI) performs root cause analysis using an LLM with Retrieval-Augmented Generation
-5. The Postmortem Service compiles a structured postmortem document automatically
-6. Engineers interact with the system through a Copilot chat interface powered by the same AI backend
+1. The Alert Service scrapes Prometheus endpoints and publishes raw alerts to Kafka when latency thresholds are breached.
+2. The Correlation Service groups related alerts into incidents using a sliding time window.
+3. The Context Service enriches each incident with logs from Elasticsearch and health data from Spring Actuator endpoints.
+The AI Service performs root cause analysis using an LLM, generating structured insights and remediation suggestions, with results cached in Redis for faster subsequent responses.
+5. The Jira Service automatically creates and links tickets from the AI analysis output.
 
-All services register with Eureka and communicate through the API Gateway. The entire stack is designed to run locally via Docker Compose or be deployed to cloud platforms.
+All Spring Boot services register with Eureka and are reached through the API Gateway. The entire stack runs locally via Docker Compose.
+
+---
+
+## System Design
+
+![System Design](https://raw.githubusercontent.com/MGhiremath0281/IncidentBrain/main/assets/system-design.png)
 
 ---
 
-## Architecture
+## Project Structure
 
-```
-                        +---------------------------+
-                        |     React / Next.js UI    |
-                        |   Dashboard + Copilot     |
-                        +-------------+-------------+
-                                      |
-                                   REST / WS
-                                      |
-                        +-------------v-------------+
-                        |       API Gateway         |
-                        |   Spring Cloud Gateway    |
-                        |         :8080             |
-                        +----+--------+--------+----+
-                             |        |        |
-              +--------------+   +----+   +----+-----------+
-              |                  |                          |
-  +-----------v-----+  +---------v-------+  +--------------v-----+
-  |  Alert Service  |  | Copilot Service |  | Postmortem Service |
-  |    :8081        |  |     :8084       |  |      :8085         |
-  +-----------+-----+  +---------+-------+  +--------------+-----+
-              |                  |                          |
-              |         +--------v--------+                |
-              |         |   AI Service    |                |
-              |         |  Python/FastAPI |                |
-              |         |     :8090       |                |
-              |         +--------+--------+                |
-              |                  |                         |
-    +---------v------------------v-------------------------v---------+
-    |                        Apache Kafka                            |
-    |   alerts.raw | incidents.created | context.ready | postmortem |
-    +---------+--------------------+------------------+--------------+
-              |                   |                  |
-  +-----------v-----+  +----------v------+  +--------v-----------+
-  | Correlation Svc |  | Context Service |  |  Notification Svc  |
-  |    :8082        |  |     :8083       |  |      :8086         |
-  +-----------------+  +-----------------+  +--------------------+
-
-  +----------------+  +---------------+  +----------+  +-----------+
-  |  PostgreSQL    |  | Elasticsearch |  |  Redis   |  | Weaviate  |
-  |  :5432         |  |    :9200      |  |  :6379   |  |  :8085    |
-  +----------------+  +---------------+  +----------+  +-----------+
-
-  +---------------------------------------------------------------+
-  |                    Eureka Server  :8761                       |
-  |              Service Registry for all Spring services         |
-  +---------------------------------------------------------------+
-```
-
----
+![Project Structure](https://raw.githubusercontent.com/MGhiremath0281/IncidentBrain/main/assets/pro-structure.png)
 
 ## Technology Stack
 
@@ -94,14 +50,15 @@ All services register with Eureka and communicate through the API Gateway. The e
 |---|---|---|
 | Service Registry | Spring Cloud Netflix Eureka | Service discovery and health monitoring |
 | API Gateway | Spring Cloud Gateway | Single entry point, routing, load balancing |
-| Microservices | Spring Boot 3, Java 17 | Alert, Correlation, Context, Copilot, Postmortem |
+| Microservices | Spring Boot 3, Java 17 | Alert, Correlation, Context, Copilot, Postmortem, Jira |
 | Event Streaming | Apache Kafka | Async event pipeline between services |
-| AI Engine | Python 3.10, FastAPI | LLM inference, RAG, embedding generation |
-| LLM | OpenAI API or Ollama (local) | Root cause analysis and natural language generation |
+| AI Engine | Spring AI | LLM inference, prompt orchestration, response generation |
+| LLM | Gemini 2.5 flash | Root cause analysis and natural language generation |
 | Relational DB | PostgreSQL | Persistent storage for incidents and postmortems |
 | Search and Logs | Elasticsearch | Log indexing and full-text search |
 | Cache | Redis | AI response caching and session data |
-| Vector DB | Weaviate | Semantic embeddings for RAG retrieval |
+| Metrics | Prometheus | Alert scraping and latency threshold monitoring |
+| Issue Tracking | Jira | Automated ticket creation from AI analysis |
 | Frontend | React, Next.js | Dashboard and Copilot chat interface |
 | Containerization | Docker, Docker Compose | Local orchestration of all services |
 
@@ -118,18 +75,23 @@ The service registry. All Spring Boot microservices register on startup and disc
 The single entry point for all external traffic. Routes requests to the correct downstream service using Spring Cloud Gateway and Eureka discovery. Handles cross-cutting concerns such as logging and fallback responses.
 
 Key routes:
+
 - `/alerts/**` → alert-service
 - `/copilot/**` → copilot-service
 - `/postmortems/**` → postmortem-service
 - `/incidents/**` → correlation-service
+- `/api/config/**` → context-service / alert-service
+- `/ingest/**` → alert-service (Prometheus subscription)
 
 ### Alert Service — port 8081
 
-Receives raw alerts via REST and publishes them to the `alerts.raw` Kafka topic. Also persists alert records to PostgreSQL for audit and replay purposes.
+Receives Prometheus scrape targets via a subscription endpoint and polls them at a configured interval. Compares observed latency against the registered threshold and publishes an alert to the `alerts.raw` Kafka topic when a breach is detected. Also persists alert records to PostgreSQL for audit and replay.
 
 Endpoints:
-- `POST /alerts` — ingest a new alert
+
+- `POST /ingest/subscribe` — register a Prometheus endpoint with a name and latency threshold
 - `GET /alerts` — list all alerts
+- `GET /alerts/{id}` — get alert by ID
 
 ### Correlation Service — port 8082
 
@@ -137,125 +99,44 @@ Consumes `alerts.raw` and groups alerts into incidents using a 5-minute sliding 
 
 ### Context Service — port 8083
 
-Consumes `incidents.created` and enriches each incident by fetching related logs from Elasticsearch and optional deployment metadata. Publishes the enriched payload to `context.ready` for downstream AI processing.
+Consumes `incidents.created` and enriches each incident by fetching related logs from Elasticsearch and health or metrics data from Actuator endpoints. Accepts runtime configuration for Elasticsearch and Actuator base URLs. Publishes the enriched payload to `context.ready` for downstream AI processing.
+
+Endpoints:
+
+- `POST /api/config/endpoints` — configure the Elasticsearch URL and Actuator base URL
 
 ### AI Service — port 8090
 
-Python/FastAPI service. Consumes `context.ready` events, builds a prompt from the enriched context, queries the LLM for root cause analysis and remediation suggestions, retrieves similar historical incidents from Weaviate using RAG, and caches results in Redis. Also exposes a synchronous REST endpoint used by the Copilot Service.
+Java/Spring Boot service using Spring AI. Consumes context.ready events, constructs prompts from enriched context, and invokes the LLM for root cause analysis and remediation suggestions. Caches results in Redis
 
 Endpoints:
+
 - `POST /analyze` — accepts context payload, returns AI analysis
 
-### Copilot Service — port 8084
 
-Bridges the frontend chat interface and the AI Service. Accepts user questions via WebSocket or REST, forwards them to the AI Service with relevant incident context, and streams responses back to the UI. Recent answers are cached in Redis.
 
-Endpoints:
-- `POST /copilot/query` — submit a chat query
-- `WS /copilot/ws` — WebSocket connection for streaming responses
+### Jira Service — port 8089
 
-### Postmortem Service — port 8085
-
-Consumes `context.ready` events, calls the AI Service for a structured summary, compiles a full postmortem document including timeline, root cause, impact, and action items, and persists it to PostgreSQL. Stores embeddings in Weaviate for future RAG retrieval.
+Consumes `analysis.completed` events and creates Jira issues using the Jira REST API. Accepts runtime credentials so they are never stored in source code. Links each ticket back to the corresponding incident ID.
 
 Endpoints:
-- `GET /postmortems` — list all postmortems
-- `GET /postmortems/{incidentId}` — get postmortem for a specific incident
+
+- `POST /api/config/jira` — configure Jira base URL, user email, API token, and project key
 
 ### Frontend UI — port 3000
 
 Next.js application with three main sections:
 
 - **Dashboard** — real-time list of active and resolved incidents with severity and status
-- **Postmortem Viewer** — structured postmortem pages including AI-generated root cause and timeline
-- **Copilot Chat** — chat interface to query the AI about any incident
-
----
-
-## Kafka Event Flow
-
-```
-Alert Service
-    |
-    | publishes
-    v
-alerts.raw
-    |
-    | consumed by
-    v
-Correlation Service ------> incidents.created
-                                    |
-                                    | consumed by
-                                    v
-                            Context Service ------> context.ready
-                                                          |
-                                         +----------------+----------------+
-                                         |                                 |
-                                         v                                 v
-                                    AI Service                   Postmortem Service
-                                         |
-                                         v
-                                  postmortem.events
-```
 
 ### Topic Reference
 
 | Topic | Producer | Consumer(s) | Key Fields |
 |---|---|---|---|
 | `alerts.raw` | Alert Service | Correlation Service | alertId, service, severity, timestamp, message |
-| `incidents.created` | Correlation Service | Context Service, Postmortem Service | incidentId, alerts[], startTime, affectedService |
+| `incidents.created` | Correlation Service | Context Service | incidentId, alerts[], startTime, affectedService |
 | `context.ready` | Context Service | AI Service, Postmortem Service | incidentId, logs[], metrics, deploymentInfo |
-| `postmortem.events` | Postmortem Service | Notification Service, UI | postmortemId, incidentId, summary, actions[] |
-
----
-
-## Project Structure
-
-```
-incidentbrain/
-|
-|-- eureka-server/
-|   |-- src/main/java/com/incidentbrain/eureka/
-|   |-- src/main/resources/application.yml
-|   `-- pom.xml
-|
-|-- api-gateway/
-|   |-- src/main/java/com/incidentbrain/gateway/
-|   |-- src/main/resources/application.yml
-|   `-- pom.xml
-|
-|-- alert-service/
-|   |-- src/main/java/com/incidentbrain/alert/
-|   |   |-- controller/AlertController.java
-|   |   |-- service/AlertService.java
-|   |   |-- kafka/AlertProducer.java
-|   |   |-- model/Alert.java
-|   |   `-- repository/AlertRepository.java
-|   `-- pom.xml
-|
-|-- correlation-service/
-|-- context-service/
-|-- copilot-service/
-|-- postmortem-service/
-|
-|-- ai-service/                  # Python / FastAPI
-|   |-- main.py
-|   |-- kafka_consumer.py
-|   |-- rag/
-|   |   |-- embedder.py
-|   |   `-- retriever.py
-|   |-- llm/
-|   |   `-- analyzer.py
-|   |-- cache/redis_client.py
-|   `-- requirements.txt
-|
-|-- incidentbrain-ui/            # Next.js
-|   |-- pages/
-|   |-- components/
-|   `-- package.json
-|
-`-- docker-compose.yml
-```
+| `analysis.completed` | AI Service | Jira Service, Notification Service | incidentId, rootCause, remediations[], summary |
 
 ---
 
@@ -265,15 +146,14 @@ incidentbrain/
 
 - Java 17 or higher
 - Maven 3.8 or higher
-- Python 3.10 or higher
-- Node.js 18 or higher
+- React.js 18 or higher
 - Docker and Docker Compose
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/incidentbrain.git
-cd incidentbrain
+git clone https://github.com/MGhiremath0281/IncidentBrain.git
+cd IncidentBrain
 ```
 
 ### 2. Start infrastructure with Docker Compose
@@ -308,19 +188,11 @@ Run each of the following in a separate terminal:
 cd alert-service && mvn spring-boot:run
 cd correlation-service && mvn spring-boot:run
 cd context-service && mvn spring-boot:run
-cd copilot-service && mvn spring-boot:run
-cd postmortem-service && mvn spring-boot:run
+cd ai-service && mvn spring-boot:run
+cd jira-service && mvn spring-boot:run
 ```
 
-Verify all five services appear in the Eureka dashboard at `http://localhost:8761`.
-
-### 6. Start the AI Service
-
-```bash
-cd ai-service
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8090 --reload
-```
+Verify all services appear in the Eureka dashboard at `http://localhost:8761`.
 
 ### 7. Start the Frontend
 
@@ -332,20 +204,69 @@ npm run dev
 
 The UI is accessible at `http://localhost:3000`.
 
-### 8. Send a test alert
+---
 
-```bash
-curl -X POST http://localhost:8080/alerts \
-  -H "Content-Type: application/json" \
-  -d '{
-    "service": "payment-service",
-    "severity": "HIGH",
-    "message": "Response time exceeded 5000ms",
-    "timestamp": "2025-04-09T10:00:00Z"
-  }'
+## Initial Configuration
+
+Before the pipeline processes any alerts, three configuration endpoints must be called. These configure where the system scrapes metrics, where it fetches logs, and where it creates Jira tickets.
+
+### Step 1 — Register a Prometheus scrape target
+
+This tells the Alert Service which Prometheus endpoint to monitor, under what name, and what latency threshold triggers an alert.
+
+```
+POST http://localhost:8080/ingest/subscribe?url=http://localhost:8084/actuator/prometheus&name=testing-service&threshold=0.002
 ```
 
-Watch the Kafka pipeline propagate: alert → incident → context → AI analysis → postmortem.
+| Parameter | Description |
+|---|---|
+| `url` | Full URL of the Prometheus `/actuator/prometheus` endpoint to scrape |
+| `name` | Logical name used to group alerts and incidents for this service |
+| `threshold` | Latency threshold in seconds — breaches above this value trigger an alert |
+
+### Step 2 — Configure Elasticsearch and Actuator endpoints
+
+This tells the Context Service where to fetch logs for enrichment and which Actuator base URL to use for health and metric data.
+
+```
+POST http://localhost:8080/api/config/endpoints
+Content-Type: application/json
+
+{
+  "esUrl": "http://localhost:9200/incidentbrain-logs-*/_search",
+  "metricsTemplate": "http://localhost:8084/actuator"
+}
+```
+
+| Field | Description |
+|---|---|
+| `esUrl` | Elasticsearch query URL — can use a wildcard index pattern |
+| `metricsTemplate` | Base Actuator URL — the Context Service appends paths such as `/health`, `/metrics`, and `/info` |
+
+### Step 3 — Configure Jira credentials
+
+This tells the Jira Service where and how to create tickets. Credentials are accepted at runtime and never stored in source code.
+
+```
+POST http://localhost:8089/api/config/jira
+Content-Type: application/json
+
+{
+  "baseUrl": "https://your-org.atlassian.net",
+  "userEmail": "you@example.com",
+  "apiToken": "your-jira-api-token",
+  "projectKey": "IB"
+}
+```
+
+| Field | Description |
+|---|---|
+| `baseUrl` | Your Atlassian instance URL |
+| `userEmail` | Email address associated with the API token |
+| `apiToken` | Jira API token generated from your Atlassian account settings |
+| `projectKey` | Jira project key under which issues will be created |
+
+Once all three steps are complete, the pipeline is active. Any latency breach on the registered Prometheus endpoint will propagate through the full event chain: alert → incident → context → AI analysis → Jira ticket → postmortem.
 
 ---
 
@@ -394,7 +315,7 @@ spring:
         - id: alert-service
           uri: lb://alert-service
           predicates:
-            - Path=/alerts/**
+            - Path=/alerts/**,/ingest/**
         - id: copilot-service
           uri: lb://copilot-service
           predicates:
@@ -403,6 +324,14 @@ spring:
           uri: lb://postmortem-service
           predicates:
             - Path=/postmortems/**
+        - id: context-service
+          uri: lb://context-service
+          predicates:
+            - Path=/api/config/endpoints
+        - id: jira-service
+          uri: lb://jira-service
+          predicates:
+            - Path=/api/config/jira
 ```
 
 ### Kafka — producer and consumer
@@ -432,9 +361,9 @@ spring:
 | Alert Service | 8081 | alert-service |
 | Correlation Service | 8082 | correlation-service |
 | Context Service | 8083 | context-service |
-| Copilot Service | 8084 | copilot-service |
-| Postmortem Service | 8085 | postmortem-service |
-| AI Service | 8090 | — (Python, not registered) |
+
+| Jira Service | 8089 | jira-service |
+| AI Service | 8090 | — Spring Ai |
 | Frontend UI | 3000 | — |
 
 ---
@@ -444,19 +373,31 @@ spring:
 ### Alert Service
 
 ```
-POST   /alerts              Ingest a new alert
-GET    /alerts              List all alerts
-GET    /alerts/{id}         Get alert by ID
+POST   /ingest/subscribe     Register a Prometheus scrape target with name and threshold
+GET    /alerts               List all alerts
+GET    /alerts/{id}          Get alert by ID
 ```
 
-Request body for `POST /alerts`:
+Query parameters for `POST /ingest/subscribe`:
+
+| Parameter | Type | Description |
+|---|---|---|
+| `url` | string | Prometheus endpoint URL |
+| `name` | string | Logical service name |
+| `threshold` | double | Latency threshold in seconds |
+
+### Context Service
+
+```
+POST   /api/config/endpoints     Configure Elasticsearch URL and Actuator base URL
+```
+
+Request body:
 
 ```json
 {
-  "service": "string",
-  "severity": "LOW | MEDIUM | HIGH | CRITICAL",
-  "message": "string",
-  "timestamp": "ISO-8601"
+  "esUrl": "string",
+  "metricsTemplate": "string"
 }
 ```
 
@@ -466,48 +407,28 @@ Request body for `POST /alerts`:
 POST   /copilot/query       Submit a question about an incident
 WS     /copilot/ws          WebSocket endpoint for streaming chat
 ```
+### Jira Service
 
-Request body for `POST /copilot/query`:
+```
+POST   /api/config/jira     Configure Jira credentials and project
+```
+
+Request body:
 
 ```json
 {
-  "incidentId": "string",
-  "question": "string"
+  "baseUrl": "string",
+  "userEmail": "string",
+  "apiToken": "string",
+  "projectKey": "string"
 }
-```
-
-### Postmortem Service
-
-```
-GET    /postmortems                   List all postmortems
-GET    /postmortems/{incidentId}      Get postmortem for a specific incident
 ```
 
 ### AI Service (internal)
 
 ```
-POST   /analyze             Accepts enriched context, returns AI analysis
+POST   /analyze     Accepts enriched context payload, returns AI root cause analysis
 ```
-
----
-
-## Development Roadmap
-
-| Version | Phase | Description | Status |
-|---|---|---|---|
-| v0.1 | Phase 0 | Environment setup — Kafka, PostgreSQL, Redis, Elasticsearch, Weaviate | Planned |
-| v0.2 | Phase 1 | Eureka Server — service registry | Planned |
-| v0.3 | Phase 2 | API Gateway — routing and discovery | Planned |
-| v0.4 | Phase 3 | Alert Service — ingest and Kafka producer | Planned |
-| v0.5 | Phase 4 | Correlation Service — incident grouping | Planned |
-| v0.6 | Phase 5 | Context Service — log enrichment | Planned |
-| v0.7 | Phase 6 | AI Service — LLM + RAG pipeline | Planned |
-| v0.8 | Phase 7 | Copilot Service — chat interface | Planned |
-| v0.9 | Phase 8 | Postmortem Service — auto-generation | Planned |
-| v1.0-beta | Phase 9 | Frontend UI — dashboard and chat | Planned |
-| v1.0-rc | Phase 10 | Integration testing and Docker | Planned |
-| v1.0 | Phase 11 | Production deployment — Render + Vercel | Planned |
-
 ---
 
 ## Contributing
@@ -520,7 +441,7 @@ Contributions are welcome. To contribute:
 4. Push to your branch: `git push origin feature/your-feature-name`
 5. Open a pull request against `main`
 
-Please follow the existing code style. Each service is independently buildable and testable — keep cross-service changes minimal and document any new Kafka topic contracts in this README.
+Please follow the existing code style. Each service is independently buildable and testable. Keep cross-service changes minimal and document any new Kafka topic contracts in this README.
 
 ---
 
