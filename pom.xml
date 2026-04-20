@@ -13,6 +13,7 @@
         <module>ai/ai-service-fixed</module>
         <module>infrastructure/eurekaserver</module>
         <module>infrastructure/config-service</module>
+        <module>infrastructure/api-gateway</module>
         <module>shared/incidentbrain-common</module>
     </modules>
 </project>

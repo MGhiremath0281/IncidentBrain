@@ -21,17 +21,12 @@ public class ContextBuilderService {
     private final IncidentRepository repository;
 
     public ContextPayload enrich(IncidentEvent event) {
-        // Extract reason (e.g., HIGH_LATENCY) from title for targeted forensics
         String title = event.getTitle() != null ? event.getTitle() : "";
         String reason = title.contains(" ") ? title.split(" ")[0] : "GENERIC_ERROR";
 
-        log.info("Starting context enrichment | Incident: {} | Service: {} | Reason: {}",
-                event.getId(), event.getService(), reason);
+        log.info(">>>> [ENRICHMENT START] Incident: {} | Service: {}", event.getId(), event.getService());
 
-        // Fetch logs - passing 3 arguments: service, timestamp, and reason
         List<String> logs = logService.getLogs(event.getService(), event.getStartedAt(), reason);
-
-        // Fetch performance metrics
         MetricsSnapshot metrics = metricsService.getMetrics(event.getService());
 
         ContextPayload payload = ContextPayload.builder()
@@ -49,6 +44,7 @@ public class ContextBuilderService {
                 .build();
 
         saveToDatabase(payload);
+        log.info("<<<< [ENRICHMENT COMPLETE] Incident: {} has been fully context-enriched.", event.getId());
         return payload;
     }
 
@@ -57,6 +53,7 @@ public class ContextBuilderService {
             EnrichedIncident entity = EnrichedIncident.builder()
                     .incidentId(p.getIncidentId())
                     .service(p.getService())
+                    .status(p.getStatus())
                     .severity(p.getSeverity())
                     .alertIds(p.getAlertIds())
                     .logs(p.getLogs())
@@ -66,9 +63,9 @@ public class ContextBuilderService {
                     .build();
 
             repository.save(entity);
-            log.info("Successfully persisted enriched context for incident: {}", p.getIncidentId());
+            log.info("[DATABASE] Persistence successful for Incident: {}", p.getIncidentId());
         } catch (Exception ex) {
-            log.error("CRITICAL: DB persistence failed for incident {}: {}", p.getIncidentId(), ex.getMessage());
+            log.error("[DATABASE] CRITICAL Persistence failure: {}", ex.getMessage());
         }
     }
 }

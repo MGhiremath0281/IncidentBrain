@@ -7,9 +7,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Slf4j
 @Service
@@ -19,40 +23,63 @@ public class ActuatorMetricsService {
     private final DynamicEndpointRegistry registry;
     private final RestTemplate restTemplate;
 
-    public MetricsSnapshot getMetrics(String serviceName) {
-        String actuatorBase = String.format(registry.getActuatorTemplate(), serviceName);
-        String metricsUrl = actuatorBase + "/metrics";
-        String healthUrl = actuatorBase + "/health";
+    // BUG FIX: The original code made 4 sequential HTTP calls (health + cpu + memory
+    // + requests) one after the other. Each call can take up to the 5s read timeout,
+    // meaning a single getMetrics() call could block for 20s in the worst case.
+    // Using a small thread pool to fire all 4 requests in parallel cuts this down
+    // to ~5s max (the slowest single call) instead of 20s.
+    private final ExecutorService metricsFetcher = Executors.newFixedThreadPool(4);
 
-        log.info("Scraping context for service: {}", serviceName);
+    public MetricsSnapshot getMetrics(String serviceName) {
+        if (!registry.isConfigured()) {
+            log.warn("[METRICS] Aborting: No Actuator template configured in registry.");
+            return MetricsSnapshot.builder().healthStatus("UNCONFIGURED").fetchedAt(LocalDateTime.now()).build();
+        }
+
+        String actuatorBase = registry.getActuatorTemplate().contains("%s")
+                ? String.format(registry.getActuatorTemplate(), serviceName)
+                : registry.getActuatorTemplate();
+
+        log.info("[METRICS] Initiating scrape for service: {} via URL: {}", serviceName, actuatorBase);
 
         try {
-            // 1. Fetch Health Status (UP/DOWN/OUT_OF_SERVICE)
-            String status = fetchHealthStatus(healthUrl);
+            // Fire all 4 HTTP calls in parallel
+            CompletableFuture<String> healthFuture = CompletableFuture.supplyAsync(
+                    () -> fetchHealthStatus(actuatorBase + "/health"), metricsFetcher);
 
-            // 2. Fetch Performance Metrics
-            Double cpu = fetchMetricValue(metricsUrl + "/system.cpu.usage");
-            Double memory = fetchMetricValue(metricsUrl + "/jvm.memory.used");
-            Double requests = fetchMetricValue(metricsUrl + "/http.server.requests");
+            CompletableFuture<Double> cpuFuture = CompletableFuture.supplyAsync(
+                    () -> fetchMetricValue(actuatorBase + "/metrics/system.cpu.usage"), metricsFetcher);
 
-            // 3. Optional: Add extra data like active threads
+            CompletableFuture<Double> memFuture = CompletableFuture.supplyAsync(
+                    () -> fetchMetricValue(actuatorBase + "/metrics/jvm.memory.used"), metricsFetcher);
+
+            CompletableFuture<Double> reqFuture = CompletableFuture.supplyAsync(
+                    () -> fetchMetricValue(actuatorBase + "/metrics/http.server.requests"), metricsFetcher);
+
+            CompletableFuture<Double> threadsFuture = CompletableFuture.supplyAsync(
+                    () -> fetchMetricValue(actuatorBase + "/metrics/jvm.threads.live"), metricsFetcher);
+
+            // Wait for all to complete
+            CompletableFuture.allOf(healthFuture, cpuFuture, memFuture, reqFuture, threadsFuture).join();
+
+            String status  = healthFuture.join();
+            Double cpu     = cpuFuture.join();
+            Double memory  = memFuture.join();
+            Double requests = reqFuture.join();
+            Double threads = threadsFuture.join();
+
+            log.info("[METRICS] Stats fetched - CPU: {}, Memory: {}, Requests: {}, Health: {}", cpu, memory, requests, status);
+
             Map<String, Object> extras = new HashMap<>();
-            extras.put("jvm.threads.live", fetchMetricValue(metricsUrl + "/jvm.threads.live"));
+            extras.put("jvm.threads.live", threads);
 
             return MetricsSnapshot.builder()
-                    .systemCpuUsage(cpu)
-                    .jvmMemoryUsed(memory)
-                    .httpRequests(requests)
-                    .healthStatus(status)
-                    .details(extras)
-                    .fetchedAt(LocalDateTime.now())
-                    .build();
+                    .systemCpuUsage(cpu).jvmMemoryUsed(memory).httpRequests(requests)
+                    .healthStatus(status).details(extras).fetchedAt(LocalDateTime.now()).build();
+
         } catch (Exception e) {
-            log.error("Failed to fetch full metrics for {}: {}", serviceName, e.getMessage());
-            return MetricsSnapshot.builder()
-                    .healthStatus("UNKNOWN")
-                    .fetchedAt(LocalDateTime.now())
-                    .build();
+            log.error("[METRICS] Critical failure fetching metrics for {}: {}", serviceName, e.getMessage());
+            return MetricsSnapshot.builder().healthStatus("UNKNOWN").fetchedAt(LocalDateTime.now()).build();
         }
     }
 
@@ -61,7 +88,7 @@ public class ActuatorMetricsService {
             JsonNode response = restTemplate.getForObject(url, JsonNode.class);
             return response != null ? response.path("status").asText("UNKNOWN") : "UNKNOWN";
         } catch (Exception e) {
-            log.warn("Health status unavailable at {}: {}", url, e.getMessage());
+            log.warn("[METRICS] Health check failed at {}: {}", url, e.getMessage());
             return "UNREACHABLE";
         }
     }
@@ -73,7 +100,7 @@ public class ActuatorMetricsService {
                 return response.path("measurements").get(0).path("value").asDouble();
             }
         } catch (Exception e) {
-            log.trace("Metric not found at {}", url);
+            log.trace("[METRICS] Metric not found at {}", url);
         }
         return 0.0;
     }

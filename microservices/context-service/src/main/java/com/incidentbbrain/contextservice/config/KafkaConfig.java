@@ -11,8 +11,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
+import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
@@ -38,6 +40,13 @@ public class KafkaConfig {
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        // BUG FIX: Added fetch tuning — without these, the consumer polls very
+        // conservatively and waits up to 500ms between fetches even when messages
+        // are available, causing slow/laggy processing under load.
+        props.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, 1);
+        props.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, 100);
+        props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10);
 
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
@@ -65,6 +74,16 @@ public class KafkaConfig {
 
         factory.setConsumerFactory(consumerFactory());
 
+        // BUG FIX: concurrency was 1 (default) — single-threaded processing means
+        // every incident queues up behind the previous one. Each enrichment does
+        // 4 sequential HTTP calls (ES + 3 actuator) so a single slow target service
+        // stalls the entire pipeline. Set to 3 to match typical partition count.
+        factory.setConcurrency(3);
+
+        // BUG FIX: BATCH ack mode lets the consumer commit offsets after processing
+        // a batch rather than after each single record, reducing broker round-trips.
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.BATCH);
+
         return factory;
     }
 
@@ -90,8 +109,14 @@ public class KafkaConfig {
         return new KafkaTemplate<>(producerFactory());
     }
 
+    // BUG FIX: Plain new RestTemplate() has NO timeouts — if Elasticsearch or any
+    // Actuator endpoint hangs, the thread blocks forever. This stalls the Kafka
+    // listener thread, causing the consumer to stop polling and lag to build up.
     @Bean
     public RestTemplate restTemplate() {
-        return new RestTemplate();
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(3_000);  // 3s to establish connection
+        factory.setReadTimeout(5_000);     // 5s to wait for response body
+        return new RestTemplate(factory);
     }
 }

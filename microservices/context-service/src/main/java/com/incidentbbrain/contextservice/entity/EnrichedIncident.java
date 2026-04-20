@@ -27,6 +27,9 @@ public class EnrichedIncident {
     @Column(nullable = false)
     private String service;
 
+    @Column(length = 20)
+    private String status;
+
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
     private Severity severity;
