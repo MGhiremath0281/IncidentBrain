@@ -26,10 +26,16 @@ public class ElasticsearchLogService {
     private final ObjectMapper objectMapper;
 
     public List<String> getLogs(String service, LocalDateTime startedAt, String reason) {
-        LocalDateTime time = (startedAt != null) ? startedAt : LocalDateTime.now();
+        if (!registry.isConfigured()) {
+            log.warn("[LOGS] Aborting: Elasticsearch URL not configured in registry.");
+            return new ArrayList<>();
+        }
 
+        LocalDateTime time = (startedAt != null) ? startedAt : LocalDateTime.now();
         String gte = time.minusMinutes(5).toInstant(ZoneOffset.UTC).toString();
         String lte = time.plusMinutes(2).toInstant(ZoneOffset.UTC).toString();
+
+        log.info("[LOGS] Fetching logs for {} | Reason: {} | Window: {} to {}", service, reason, gte, lte);
 
         String keywordQuery = switch (reason) {
             case "DATABASE_EXHAUSTED" -> "hikari OR connection OR database OR sql OR pool OR exhausted";
@@ -58,15 +64,14 @@ public class ElasticsearchLogService {
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<String> entity = new HttpEntity<>(query, headers);
 
-            String rawResponse = restTemplate.postForObject(
-                    registry.getElasticsearchUrl(),
-                    entity,
-                    String.class
-            );
+            log.debug("[LOGS] Sending query to ES: {}", registry.getElasticsearchUrl());
+            String rawResponse = restTemplate.postForObject(registry.getElasticsearchUrl(), entity, String.class);
 
-            return parseMeaningfulLogs(rawResponse);
+            List<String> results = parseMeaningfulLogs(rawResponse);
+            log.info("[LOGS] Successfully retrieved {} log lines for {}", results.size(), service);
+            return results;
         } catch (Exception e) {
-            log.error("Elasticsearch query failed for reason {}: {}", reason, e.getMessage());
+            log.error("[LOGS] Elasticsearch connection failed: {}", e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -78,54 +83,31 @@ public class ElasticsearchLogService {
             JsonNode hits = root.path("hits").path("hits");
 
             if (hits.isMissingNode() || hits.isEmpty()) {
-                log.warn("No logs found in Elasticsearch.");
+                log.info("[LOGS] Zero hits found in Elasticsearch response.");
                 return logs;
             }
 
             for (JsonNode hit : hits) {
                 JsonNode source = hit.path("_source");
-                String level = source.path("level").asText("INFO").toUpperCase();
-                String timestamp = source.path("@timestamp").asText("N/A");
-                String rawMessage = source.path("message").asText("");
-
-                // SEPARATED CLEANING LOGIC
-                String cleanMessage = simplifyMessage(rawMessage);
-
-                String formattedLog = String.format("[%s] %s - %s", timestamp, level, cleanMessage);
-
-                if (!logs.contains(formattedLog)) {
-                    logs.add(formattedLog);
-                }
-
+                String formattedLog = String.format("[%s] %s - %s",
+                        source.path("@timestamp").asText("N/A"),
+                        source.path("level").asText("INFO").toUpperCase(),
+                        simplifyMessage(source.path("message").asText(""))
+                );
+                if (!logs.contains(formattedLog)) logs.add(formattedLog);
                 if (logs.size() >= 15) break;
             }
-        } catch (Exception e) {
-            log.error("Error parsing ES JSON: {}", e.getMessage());
-        }
+        } catch (Exception e) { log.error("[LOGS] JSON Parsing Error: {}", e.getMessage()); }
         return logs;
     }
 
-    /**
-     * Helper to extract core error details and separate them from system noise.
-     */
     private String simplifyMessage(String message) {
         if (message == null || message.isEmpty()) return "No content";
-
-        // Logic 1: Extract Exception within brackets (Spring's default error format)
         if (message.contains("exception [")) {
             int start = message.indexOf("exception [") + 11;
             int end = message.indexOf("]", start);
-            if (end > start) {
-                return "CORE_ERROR: " + message.substring(start, end);
-            }
+            if (end > start) return "CORE_ERROR: " + message.substring(start, end);
         }
-
-        // Logic 2: Handle specific application business logs
-        if (message.contains("Creating user")) return message;
-        if (message.contains("Deleting user")) return message;
-        if (message.contains("failure")) return "APP_FAILURE: " + message;
-
-        // Logic 3: Truncate everything else if it's too long
         return (message.length() > 120) ? message.substring(0, 117) + "..." : message;
     }
 }
