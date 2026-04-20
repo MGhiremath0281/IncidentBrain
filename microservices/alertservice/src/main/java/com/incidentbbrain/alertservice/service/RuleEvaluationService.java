@@ -16,19 +16,21 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class RuleEvaluationService {
 
+    // Storage for active alerts to show on the dashboard
     private final Map<String, Instant> activeAlerts = new ConcurrentHashMap<>();
     private static final Duration REPEAT_INTERVAL = Duration.ofMinutes(5);
-    private static final double LATENCY_THRESHOLD = 0.006;
 
-    public AlertRequest evaluate(List<MetricPoint> metrics) {
-        String serviceName = "testing-service";
+    public Map<String, Instant> getActiveAlerts() {
+        return activeAlerts;
+    }
 
+    public AlertRequest evaluate(List<MetricPoint> metrics, String serviceName, Double customThreshold) {
         double sumTime = 0, countRequests = 0;
         double activeConns = 0, maxConns = 0;
         boolean upMetricPresent = false;
         boolean isUp = true;
 
-        // 1. Collect all metrics from the list
+        // 1. Parse metrics into local variables
         for (MetricPoint m : metrics) {
             switch (m.getName()) {
                 case "up" -> {
@@ -42,28 +44,28 @@ public class RuleEvaluationService {
             }
         }
 
-        // --- RULE 1: SERVICE DOWN (Only if metric is actually present) ---
+        // --- RULE 1: SERVICE DOWN (Critical) ---
         if (upMetricPresent && !isUp) {
-            return processStatefulAlert(serviceName, "SERVICE_DOWN", "Critical: Service is unreachable", Severity.CRITICAL);
+            return processStatefulAlert(serviceName, "SERVICE_DOWN",
+                    "Critical: Service is unreachable", Severity.CRITICAL);
         }
 
-        // --- RULE 2: DATABASE EXHAUSTION ---
-        // Using your metrics: activeConns=0.0, maxConns=10.0
+        // --- RULE 2: DATABASE EXHAUSTION (High) ---
         if (maxConns > 0 && (activeConns / maxConns) >= 0.9) {
             return processStatefulAlert(serviceName, "DATABASE_EXHAUSTED",
-                    String.format("DB Pool nearly full: %.0f/%.0f", activeConns, maxConns), Severity.HIGH);
+                    String.format("DB Pool full: %.0f/%.0f", activeConns, maxConns), Severity.HIGH);
         }
 
-        // --- RULE 3: HIGH LATENCY (Your working logic) ---
+        // --- RULE 3: HIGH LATENCY (Medium - uses dashboard-defined threshold) ---
         double avgLatency = (countRequests > 0) ? (sumTime / countRequests) : 0;
         String latencyKey = serviceName + "_HIGH_LATENCY";
 
-        if (avgLatency > LATENCY_THRESHOLD) {
+        if (avgLatency > customThreshold) {
             return processStatefulAlert(serviceName, "HIGH_LATENCY",
-                    String.format("Latency breached: %.4f s", avgLatency), Severity.MEDIUM);
+                    String.format("Latency %.4f s (Threshold: %.4f s)", avgLatency, customThreshold), Severity.MEDIUM);
         } else if (avgLatency > 0) {
             if (activeAlerts.remove(latencyKey) != null) {
-                log.info("RECOVERY: Latency for {} returned to normal", serviceName);
+                log.info("RECOVERY: {} is back to normal performance", serviceName);
             }
         }
 
@@ -75,14 +77,15 @@ public class RuleEvaluationService {
         Instant now = Instant.now();
         Instant firstDetected = activeAlerts.get(key);
 
+        // New Alert Detected
         if (firstDetected == null) {
             activeAlerts.put(key, now);
             log.info("STATE CHANGE: {} {} detected", service, reason);
             return buildRequest(service, reason, message, sev);
         }
 
-        // Re-alert after 5 minutes (Your working reminder logic)
-        if (Duration.between(firstDetected, now).toMinutes() >= 5) {
+        // Reminder Logic: Re-send alert every 5 minutes if still broken
+        if (Duration.between(firstDetected, now).compareTo(REPEAT_INTERVAL) >= 0) {
             activeAlerts.put(key, now); // Reset timer
             return buildRequest(service, reason, "STILL ACTIVE: " + message, sev);
         }
@@ -98,7 +101,7 @@ public class RuleEvaluationService {
                 .reason(reason)
                 .source("PROMETHEUS")
                 .message(message)
-                .host("metrics-engine")
+                .host("incident-brain-engine")
                 .build();
     }
 }
