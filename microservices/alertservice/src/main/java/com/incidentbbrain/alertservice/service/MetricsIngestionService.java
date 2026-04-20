@@ -36,7 +36,7 @@ public class MetricsIngestionService {
     @Data
     @Builder
     @AllArgsConstructor
-    @NoArgsConstructor // Added to ensure Lombok plays nice with the builder and defaults
+    @NoArgsConstructor
     public static class LiveStatus {
         private String name;
         private boolean up;
@@ -83,21 +83,25 @@ public class MetricsIngestionService {
 
             List<MetricPoint> metrics = parserService.parse(raw);
 
-            // 1. Update the "Live Gauges" data
             updateLiveStatus(config, metrics);
 
-            // 2. Run Alert Rules
             AlertRequest alert = ruleService.evaluate(metrics, config.name(), config.threshold());
             if (alert != null) {
                 log.warn("⚠ ALERT TRIGGERED for [{}]: {}", config.name(), alert.getMessage());
                 restTemplate.postForObject(ALERT_INGEST_URL, alert, String.class);
             } else {
-                log.info("{} is within healthy limits.", config.name());
+                boolean isCurrentlyFailing = ruleService.getActiveAlerts().keySet().stream()
+                        .anyMatch(key -> key.startsWith(config.name()));
+
+                if (isCurrentlyFailing) {
+                    log.info("[{}] is STILL FAILING (Alert suppressed/stateful)", config.name());
+                } else {
+                    log.info("{} is within healthy limits.", config.name());
+                }
             }
 
         } catch (Exception e) {
             log.error(" FAILED to scrape [{}]: {}", config.name(), e.getMessage());
-            // Update status to DOWN so the dashboard turns RED
             liveStatusMap.put(config.url(), LiveStatus.builder()
                     .name(config.name())
                     .up(false)
