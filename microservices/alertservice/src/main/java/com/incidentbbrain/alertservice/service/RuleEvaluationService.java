@@ -48,12 +48,24 @@ public class RuleEvaluationService {
         if (upMetricPresent && !isUp) {
             return processStatefulAlert(serviceName, "SERVICE_DOWN",
                     "Critical: Service is unreachable", Severity.CRITICAL);
+        } else if (upMetricPresent) {
+            // Service recovered — clear the active alert so a new one fires if it goes down again
+            String downKey = serviceName + "_SERVICE_DOWN";
+            if (activeAlerts.remove(downKey) != null) {
+                log.info("RECOVERY: {} is back UP", serviceName);
+            }
         }
 
         // --- RULE 2: DATABASE EXHAUSTION (High) ---
         if (maxConns > 0 && (activeConns / maxConns) >= 0.9) {
             return processStatefulAlert(serviceName, "DATABASE_EXHAUSTED",
                     String.format("DB Pool full: %.0f/%.0f", activeConns, maxConns), Severity.HIGH);
+        } else if (maxConns > 0) {
+            // DB connections back to normal — clear the active alert
+            String dbKey = serviceName + "_DATABASE_EXHAUSTED";
+            if (activeAlerts.remove(dbKey) != null) {
+                log.info("RECOVERY: {} DB connection pool back to normal", serviceName);
+            }
         }
 
         // --- RULE 3: HIGH LATENCY (Medium - uses dashboard-defined threshold) ---
