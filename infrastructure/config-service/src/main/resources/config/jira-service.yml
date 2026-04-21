@@ -30,8 +30,5 @@ spring:
       prefer-ip-address: true
       instance-id: ${spring.application.name}:${random.uuid}
 
-jira:
-  base-url: https://incidentbrain.atlassian.net
-  user-email: ${JIRA_USER_EMAIL}
-  api-token: ${JIRA_API_TOKEN}
-  project-key: ${JIRA_PROJECT_KEY:KAN}
+encryption:
+  master-key: ${ENCRYPTION_MASTER_KEY}
