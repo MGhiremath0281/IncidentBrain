@@ -24,6 +24,10 @@ public class User {
     @Column(nullable = false)
     private String password;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "team_id", nullable = false)
+    private Team team;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
