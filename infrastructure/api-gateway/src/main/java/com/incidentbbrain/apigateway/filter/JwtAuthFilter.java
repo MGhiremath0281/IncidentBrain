@@ -15,7 +15,6 @@ import java.util.List;
 @Component
 public class JwtAuthFilter implements GlobalFilter, Ordered {
 
-    // Routes that do NOT require a JWT token
     private static final List<String> PUBLIC_PATHS = List.of(
             "/auth/login",
             "/auth/register"
@@ -28,12 +27,10 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getURI().getPath();
 
-        // Skip JWT check for public endpoints
         if (isPublicPath(path)) {
             return chain.filter(exchange);
         }
 
-        // Grab Authorization header
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
@@ -48,11 +45,13 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             return exchange.getResponse().setComplete();
         }
 
-        // Optionally forward the authenticated username downstream as a header
         String username = jwtUtil.extractUsername(token);
+        String team = jwtUtil.extractTeam(token);
+
         ServerWebExchange mutatedExchange = exchange.mutate()
                 .request(exchange.getRequest().mutate()
                         .header("X-Username", username)
+                        .header("X-Team", team)
                         .build())
                 .build();
 
@@ -65,6 +64,6 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
     @Override
     public int getOrder() {
-        return -1; // Run before all other filters
+        return -1;
     }
 }
