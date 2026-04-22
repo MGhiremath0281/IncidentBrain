@@ -3,12 +3,14 @@ package com.incidentbbrain.alertservice.controller;
 import com.incidentbbrain.alertservice.service.MetricsIngestionService;
 import com.incidentbbrain.alertservice.service.RuleEvaluationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/ingest")
 @RequiredArgsConstructor
@@ -18,10 +20,15 @@ public class MetricsIngestionController {
     private final MetricsIngestionService ingestionService;
     private final RuleEvaluationService ruleService;
 
-    // FEATURE 4: Add Control
     @PostMapping("/subscribe")
-    public ResponseEntity<String> subscribe(@RequestParam String url, @RequestParam String name, @RequestParam Double threshold) {
+    public ResponseEntity<String> subscribe(@RequestParam String url,
+                                            @RequestParam String name,
+                                            @RequestParam Double threshold) {
+
+        log.info("SUBSCRIBE API HIT");
+
         ingestionService.subscribe(url, name, threshold);
+
         return ResponseEntity.ok("Monitoring " + name);
     }
 

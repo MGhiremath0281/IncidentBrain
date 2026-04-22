@@ -12,6 +12,8 @@ spring:
     hikari:
       connection-init-sql: "SET TIME ZONE 'UTC'"
       maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 20000
 
   jpa:
     hibernate:
@@ -27,6 +29,7 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
       properties:
         spring.json.add.type.headers: true
 
@@ -42,6 +45,9 @@ management:
     web:
       exposure:
         include: prometheus,health,info
+  endpoint:
+    health:
+      show-details: always
   metrics:
     export:
       prometheus:
@@ -52,3 +58,20 @@ logging:
     root: INFO
     com.incidentbbrain.alertservice: INFO
     org.springframework.web: INFO
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      prometheusCB:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        registerHealthIndicator: true
+
+      alertPushCB:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        registerHealthIndicator: true

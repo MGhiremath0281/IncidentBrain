@@ -1,18 +1,14 @@
 package com.incidentbbrain.alertservice.service;
 
-import com.incidentbbrain.alertservice.client.PrometheusClient;
+import com.incidentbbrain.alertservice.client.MetricsClient;
 import com.incidentbbrain.alertservice.dto.AlertRequest;
 import com.incidentbbrain.alertservice.dto.MetricPoint;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
+import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,14 +18,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class MetricsIngestionService {
 
-    private final PrometheusClient prometheusClient;
     private final PrometheusParserService parserService;
     private final RuleEvaluationService ruleService;
-    private final RestTemplate restTemplate;
+    private final MetricsClient metricsClient;
 
     private final Map<String, TargetConfig> monitoringTargets = new ConcurrentHashMap<>();
     private final Map<String, LiveStatus> liveStatusMap = new ConcurrentHashMap<>();
-    private static final String ALERT_INGEST_URL = "http://localhost:8081/alerts/ingest";
 
     public record TargetConfig(String url, String name, Double threshold) {}
 
@@ -53,6 +47,7 @@ public class MetricsIngestionService {
     public void unsubscribe(String url) {
         TargetConfig removed = monitoringTargets.remove(url);
         liveStatusMap.remove(url);
+
         if (removed != null) {
             log.info("Dashboard: Unsubscribed target [{}]", removed.name());
         }
@@ -68,17 +63,25 @@ public class MetricsIngestionService {
             log.debug("No targets to monitor. Waiting...");
             return;
         }
-        log.info(" Starting scrape cycle for {} targets", monitoringTargets.size());
+
+        log.info("Starting scrape cycle for {} targets", monitoringTargets.size());
         monitoringTargets.values().forEach(this::process);
     }
 
     private void process(TargetConfig config) {
         try {
             log.info("Scraping metrics for: {}", config.name());
-            String raw = prometheusClient.fetch(config.url());
+
+            String raw = metricsClient.fetch(config.url());
+
+            if ("CB_OPEN".equals(raw)) {
+                log.warn("Skipping {} due to OPEN circuit breaker", config.name());
+                return;
+            }
 
             if (raw == null || raw.isBlank()) {
-                throw new RuntimeException("Empty response from Prometheus");
+                log.warn("Empty response for {}", config.name());
+                return;
             }
 
             List<MetricPoint> metrics = parserService.parse(raw);
@@ -86,9 +89,10 @@ public class MetricsIngestionService {
             updateLiveStatus(config, metrics);
 
             AlertRequest alert = ruleService.evaluate(metrics, config.name(), config.threshold());
+
             if (alert != null) {
                 log.warn("⚠ ALERT TRIGGERED for [{}]: {}", config.name(), alert.getMessage());
-                restTemplate.postForObject(ALERT_INGEST_URL, alert, String.class);
+                metricsClient.push(alert);
             } else {
                 boolean isCurrentlyFailing = ruleService.getActiveAlerts().keySet().stream()
                         .anyMatch(key -> key.startsWith(config.name()));
@@ -101,19 +105,21 @@ public class MetricsIngestionService {
             }
 
         } catch (Exception e) {
-            log.error(" FAILED to scrape [{}]: {}", config.name(), e.getMessage());
+            log.error("FAILED to scrape [{}]: {}", config.name(), e.getMessage());
+
             liveStatusMap.put(config.url(), LiveStatus.builder()
                     .name(config.name())
                     .up(false)
                     .latency(0.0)
                     .dbUsagePercent(0.0)
-                    .lastUpdate(java.time.LocalTime.now().toString())
+                    .lastUpdate(LocalTime.now().toString())
                     .build());
         }
     }
 
     private void updateLiveStatus(TargetConfig config, List<MetricPoint> metrics) {
         double sum = 0, count = 0, active = 0, max = 0;
+
         for (MetricPoint m : metrics) {
             switch (m.getName()) {
                 case "http_server_requests_seconds_sum" -> sum = m.getValue();
@@ -128,11 +134,14 @@ public class MetricsIngestionService {
                 .up(true)
                 .latency(count > 0 ? sum / count : 0)
                 .dbUsagePercent(max > 0 ? (active / max) * 100 : 0)
-                .lastUpdate(java.time.LocalTime.now().toString())
+                .lastUpdate(LocalTime.now().toString())
                 .build();
 
         liveStatusMap.put(config.url(), status);
+
         log.info("Status Updated for [{}]: Latency={}s, DB={} %",
-                config.name(), String.format("%.4f", status.getLatency()), status.getDbUsagePercent());
+                config.name(),
+                String.format("%.4f", status.getLatency()),
+                status.getDbUsagePercent());
     }
 }
