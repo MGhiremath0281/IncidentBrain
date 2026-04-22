@@ -4,7 +4,9 @@ import com.incidentbbrain.authservice.dto.AuthResponse;
 import com.incidentbbrain.authservice.dto.ChangePasswordRequest;
 import com.incidentbbrain.authservice.dto.LoginRequest;
 import com.incidentbbrain.authservice.dto.RegisterRequest;
+import com.incidentbbrain.authservice.entity.Team;
 import com.incidentbbrain.authservice.entity.User;
+import com.incidentbbrain.authservice.repository.TeamRepository;
 import com.incidentbbrain.authservice.repository.UserRepository;
 import com.incidentbbrain.authservice.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import java.time.LocalDateTime;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final TeamRepository teamRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
@@ -27,9 +30,15 @@ public class AuthService {
             throw new RuntimeException("User already exists");
         }
 
+        Team team = teamRepository.findByName(request.getTeamName())
+                .orElseGet(() -> teamRepository.save(
+                        Team.builder().name(request.getTeamName()).build()
+                ));
+
         User user = User.builder()
                 .username(request.getUsername())
                 .password(passwordEncoder.encode(request.getPassword()))
+                .team(team)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -47,7 +56,7 @@ public class AuthService {
             throw new RuntimeException("Invalid credentials");
         }
 
-        String token = jwtUtil.generateToken(user.getUsername());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getTeam().getName());
         return new AuthResponse(token);
     }
 
