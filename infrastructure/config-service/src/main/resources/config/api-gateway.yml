@@ -19,6 +19,11 @@ spring:
         response-timeout: 10s
 
       routes:
+        - id: auth-service-route
+          uri: lb://AUTH-SERVICE
+          predicates:
+            - Path=/auth/**
+
         - id: alert-service-route
           uri: lb://ALERT-SERVICE
           predicates:
