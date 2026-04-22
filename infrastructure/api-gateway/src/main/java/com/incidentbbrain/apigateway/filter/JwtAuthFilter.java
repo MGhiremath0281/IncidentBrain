@@ -52,7 +52,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
         String username = jwtUtil.extractUsername(token);
         ServerWebExchange mutatedExchange = exchange.mutate()
                 .request(exchange.getRequest().mutate()
-                        .header("X-Authenticated-User", username)
+                        .header("X-Username", username)
                         .build())
                 .build();
 
