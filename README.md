@@ -1,24 +1,10 @@
+
+![Project Structure](docs/banner.png)
+
 # IncidentBrain: Event-Driven Incident Detection & LLM-Assisted Jira Auto-Ticketing System
 
 AI-powered incident management platform built on Spring Boot microservices. IncidentBrain automatically ingests Prometheus alerts, correlates them into incidents, enriches each incident with logs and deployment context, generates root cause analysis using an LLM, creates Jira tickets, and produces structured postmortems — all in real time through an event-driven Kafka pipeline.
 
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [System Design](#system-design)
-- [Project Structure](#project-structure)
-- [Technology Stack](#technology-stack)
-- [Microservices](#microservices)
-- [Getting Started](#getting-started)
-- [Initial Configuration](#initial-configuration)
-- [Configuration Reference](#configuration-reference)
-- [API Reference](#api-reference)
-- [Contributing](#contributing)
-- [License](#license)
-
----
 
 ## Overview
 
@@ -42,7 +28,7 @@ All Spring Boot services register with Eureka and are reached through the API Ga
 
 ## Project Structure
 
-![Project Structure](docs/pro-structure.png)
+![Project Structure](docs/pro-structre.png)
 
 ## Technology Stack
 
@@ -64,70 +50,6 @@ All Spring Boot services register with Eureka and are reached through the API Ga
 
 ---
 
-## Microservices
-
-### Eureka Server — port 8761
-
-The service registry. All Spring Boot microservices register on startup and discover each other by name. The API Gateway uses Eureka's discovery locator to route requests without hardcoded URLs.
-
-### API Gateway — port 8080
-
-The single entry point for all external traffic. Routes requests to the correct downstream service using Spring Cloud Gateway and Eureka discovery. Handles cross-cutting concerns such as logging and fallback responses.
-
-Key routes:
-
-- `/alerts/**` → alert-service
-- `/copilot/**` → copilot-service
-- `/postmortems/**` → postmortem-service
-- `/incidents/**` → correlation-service
-- `/api/config/**` → context-service / alert-service
-- `/ingest/**` → alert-service (Prometheus subscription)
-
-### Alert Service — port 8081
-
-Receives Prometheus scrape targets via a subscription endpoint and polls them at a configured interval. Compares observed latency against the registered threshold and publishes an alert to the `alerts.raw` Kafka topic when a breach is detected. Also persists alert records to PostgreSQL for audit and replay.
-
-Endpoints:
-
-- `POST /ingest/subscribe` — register a Prometheus endpoint with a name and latency threshold
-- `GET /alerts` — list all alerts
-- `GET /alerts/{id}` — get alert by ID
-
-### Correlation Service — port 8082
-
-Consumes `alerts.raw` and groups alerts into incidents using a 5-minute sliding time window, keyed by service name and severity. Publishes new incidents to `incidents.created` and persists them to PostgreSQL.
-
-### Context Service — port 8083
-
-Consumes `incidents.created` and enriches each incident by fetching related logs from Elasticsearch and health or metrics data from Actuator endpoints. Accepts runtime configuration for Elasticsearch and Actuator base URLs. Publishes the enriched payload to `context.ready` for downstream AI processing.
-
-Endpoints:
-
-- `POST /api/config/endpoints` — configure the Elasticsearch URL and Actuator base URL
-
-### AI Service — port 8090
-
-Java/Spring Boot service using Spring AI. Consumes context.ready events, constructs prompts from enriched context, and invokes the LLM for root cause analysis and remediation suggestions. Caches results in Redis
-
-Endpoints:
-
-- `POST /analyze` — accepts context payload, returns AI analysis
-
-
-
-### Jira Service — port 8089
-
-Consumes `analysis.completed` events and creates Jira issues using the Jira REST API. Accepts runtime credentials so they are never stored in source code. Links each ticket back to the corresponding incident ID.
-
-Endpoints:
-
-- `POST /api/config/jira` — configure Jira base URL, user email, API token, and project key
-
-### Frontend UI — port 3000
-
-Next.js application with three main sections:
-
-- **Dashboard** — real-time list of active and resolved incidents with severity and status
 
 ### Topic Reference
 
@@ -248,7 +170,7 @@ Content-Type: application/json
 This tells the Jira Service where and how to create tickets. Credentials are accepted at runtime and never stored in source code.
 
 ```
-POST http://localhost:8089/api/config/jira
+POST http://localhost:8080/api/config/jira
 Content-Type: application/json
 
 {
