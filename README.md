@@ -36,13 +36,13 @@ All Spring Boot services register with Eureka and are reached through the API Ga
 
 ## System Design
 
-![System Design](./assets/system-design.png)
+![System Design](docs/system-design.png)
 
 ---
 
 ## Project Structure
 
-![Project Structure](./assets/pro-structure.png)
+![Project Structure](docs/pro-structure.png)
 
 ## Technology Stack
 

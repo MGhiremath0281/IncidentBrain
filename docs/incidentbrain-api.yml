@@ -1,0 +1,138 @@
+incidentBrainApiDocumentation:
+  version: "1.1.0"
+  authentication: "JWT Bearer Token required for all non-auth endpoints"
+
+  authentication_module:
+    description: "Endpoints for user access control. These are the only public endpoints."
+
+    register_user:
+      method: "POST"
+      endpoint: "/auth/register"
+      request_body:
+        username: "admin"
+        password: "securePassword123"
+      response:
+        status: "201 Created"
+        message: "User registered successfully"
+
+    login_user:
+      method: "POST"
+      endpoint: "/auth/login"
+      request_body:
+        username: "admin"
+        password: "securePassword123"
+      response:
+        status: "200 OK"
+        body:
+          token: "eyJhbGciOiJIUzI1NiJ..."
+
+  metrics_ingestion_monitoring:
+    description: "All endpoints require Authorization: Bearer <token>"
+
+    subscribe_service_monitoring:
+      method: "POST"
+      endpoint: "/ingest/subscribe"
+      query_parameters:
+        url: null
+        name: null
+        threshold: null
+      response: "200 OK - alice is now monitoring testing-service"
+
+    live_monitoring_status:
+      method: "GET"
+      endpoint: "/ingest/status"
+      response:
+        status: "200 OK"
+        body:
+          "http://localhost:8084/actuator/prometheus":
+            name: "testing-service"
+            up: true
+            latency: 10.51
+            dbUsagePercent: 0.0
+            lastUpdate: "2026-04-23T12:00:00Z"
+
+    unsubscribe_monitoring:
+      method: "POST"
+      endpoint: "/ingest/unsubscribe"
+      query_parameters:
+        url: null
+      response: "200 OK - alice removed http://localhost:8084/actuator/prometheus"
+
+  context_dashboard:
+    description: "All endpoints require Authorization: Bearer <token>"
+
+    active_incidents:
+      method: "GET"
+      endpoint: "/context/dashboard/active"
+      response_example:
+        incidentId: "uuid"
+        service: "testing-service"
+        status: "OPEN"
+        severity: "MEDIUM"
+        alertIds:
+          - "uuid"
+        logs:
+          - "log lines..."
+        metrics:
+          systemCpuUsage: 0.33
+          jvmMemoryUsed: 150000000
+          httpRequests: 71
+          healthStatus: "UP"
+          fetchedAt: "timestamp"
+          details:
+            jvm.threads.live: 25
+        incidentStartedAt: "timestamp"
+        enrichedAt: "timestamp"
+
+    incident_history:
+      method: "GET"
+      endpoint: "/context/dashboard/history/{serviceName}"
+      response: "Array of Incident objects"
+
+    deep_incident_analysis:
+      method: "GET"
+      endpoint: "/context/dashboard/analysis/{incidentId}"
+      response_example:
+        incidentId: "uuid"
+        rootCause: "Description of the issue"
+        impactScore: 75
+        suggestedFix: "Steps to resolve"
+        confidenceLevel: "90%"
+
+  jira_integration:
+    add_jira_credentials:
+      method: "POST"
+      endpoint: "/api/jira/credentials"
+      request_body:
+        name: "primary-jira"
+        baseUrl: "https://incidentbrain.atlassian.net"
+        userEmail: "user@gmail.com"
+        apiToken: "your-token"
+        projectKey: "KAN"
+        active: true
+      response: "200 OK - saved object with generated id"
+
+    jira_metrics:
+      method: "GET"
+      endpoint: "/api/jira/credentials/metrics"
+      response:
+        totalTicketsCreated: 5
+        activeCredentialSets: 1
+        totalCredentialSets: 1
+
+  configuration:
+    update_infrastructure_endpoints:
+      method: "POST"
+      endpoint: "/api/config/endpoints"
+      request_body:
+        esUrl: "http://localhost:9200/incidentbrain-logs-*/_search"
+        metricsTemplate: "http://localhost:8084/actuator"
+      response: "200 OK - Infrastructure ports injected."
+
+    get_current_configuration:
+      method: "GET"
+      endpoint: "/api/config/current"
+      response:
+        elasticsearchUrl: "..."
+        actuatorTemplate: "..."
+        configured: true
