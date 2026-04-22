@@ -23,29 +23,28 @@ public class MetricsIngestionController {
     @PostMapping("/subscribe")
     public ResponseEntity<String> subscribe(@RequestParam String url,
                                             @RequestParam String name,
-                                            @RequestParam Double threshold) {
+                                            @RequestParam Double threshold,
+                                            @RequestHeader("X-Username") String username) {
 
-        log.info("SUBSCRIBE API HIT");
-
+        log.info("User '{}' subscribed URL: {} with name: {}", username, url, name);
         ingestionService.subscribe(url, name, threshold);
-
-        return ResponseEntity.ok("Monitoring " + name);
+        return ResponseEntity.ok(username + " is now monitoring " + name);
     }
 
-    // FEATURE 4: Remove Control
     @DeleteMapping("/unsubscribe")
-    public ResponseEntity<String> unsubscribe(@RequestParam String url) {
+    public ResponseEntity<String> unsubscribe(@RequestParam String url,
+                                              @RequestHeader("X-Username") String username) {
+
+        log.info("User '{}' unsubscribed URL: {}", username, url);
         ingestionService.unsubscribe(url);
-        return ResponseEntity.ok("Removed " + url);
+        return ResponseEntity.ok(username + " removed " + url);
     }
 
-    // FEATURE 1 & 2: Subscribed URLs + Live Gauges (Latency/DB)
     @GetMapping("/status")
     public ResponseEntity<Map<String, MetricsIngestionService.LiveStatus>> getStatus() {
         return ResponseEntity.ok(ingestionService.getAllStatuses());
     }
 
-    // FEATURE 3: Active Alerts (What is currently broken)
     @GetMapping("/alerts/active")
     public ResponseEntity<Map<String, Instant>> getActiveAlerts() {
         return ResponseEntity.ok(ruleService.getActiveAlerts());
