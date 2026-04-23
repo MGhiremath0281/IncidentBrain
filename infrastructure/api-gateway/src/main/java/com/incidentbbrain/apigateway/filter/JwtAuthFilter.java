@@ -46,12 +46,10 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
         }
 
         String username = jwtUtil.extractUsername(token);
-        String team = jwtUtil.extractTeam(token);
 
         ServerWebExchange mutatedExchange = exchange.mutate()
                 .request(exchange.getRequest().mutate()
                         .header("X-Username", username)
-                        .header("X-Team", team)
                         .build())
                 .build();
 
