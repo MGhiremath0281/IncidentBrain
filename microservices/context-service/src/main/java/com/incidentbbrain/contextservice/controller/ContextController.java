@@ -12,7 +12,6 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/context")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class ContextController {
 
     private final IncidentContextService contextService;

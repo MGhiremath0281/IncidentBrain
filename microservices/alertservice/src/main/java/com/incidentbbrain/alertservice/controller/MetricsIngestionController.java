@@ -14,7 +14,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/ingest")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class MetricsIngestionController {
 
     private final MetricsIngestionService ingestionService;
