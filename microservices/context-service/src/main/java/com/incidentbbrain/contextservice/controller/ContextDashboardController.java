@@ -16,7 +16,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/context/dashboard")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class ContextDashboardController {
 
     private final IncidentContextService contextService;
