@@ -7,6 +7,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class AuthServiceApplication {
 
     public static void main(String[] args) {
+
+        System.out.println("SERVER_IP = " + System.getenv("SERVER_IP"));
+
         SpringApplication.run(AuthServiceApplication.class, args);
     }
 
