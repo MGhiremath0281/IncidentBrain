@@ -3,7 +3,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/jira_db
+    url: jdbc:postgresql://${SERVER_IP}:5432/jira_db
     username: postgres
     password: secret
 
@@ -12,7 +12,7 @@ spring:
       ddl-auto: update
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SERVER_IP}:9092
     consumer:
       group-id: jira-orchestrator-group
       auto-offset-reset: earliest
