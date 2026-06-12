@@ -18,7 +18,7 @@ spring:
             model: gemini-2.5-flash
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: 100.85.231.85:9092
     # FIXED: Added producer config so IncidentAnalysis objects can be sent as JSON
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -46,11 +46,11 @@ spring:
 
   data:
     redis:
-      host: localhost
+      host: ${SERVER_IP}
       port: 6379
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/aiservice_db
+    url: jdbc:postgresql://${SERVER_IP}:5432/aiservice_db
     username: postgres
     password: secret
     driver-class-name: org.postgresql.Driver
