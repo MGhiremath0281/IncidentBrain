@@ -3,7 +3,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/correlation_db
+    url: jdbc:postgresql://${SERVER_IP}:5432/correlation_db
     username: postgres
     password: secret
     driver-class-name: org.postgresql.Driver
@@ -19,7 +19,7 @@ spring:
           time_zone: UTC
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SERVER_IP}:9092
     consumer:
       group-id: correlation-group-v2
       auto-offset-reset: earliest

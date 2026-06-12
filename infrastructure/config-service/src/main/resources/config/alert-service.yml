@@ -6,7 +6,7 @@ spring:
     name: alert-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/incidentbrain?options=-c%20TimeZone=UTC
+    url: jdbc:postgresql://${SERVER_IP}:5432/incidentbrain?options=-c%20TimeZone=UTC
     username: postgres
     password: secret
     hikari:
@@ -25,7 +25,7 @@ spring:
           time_zone: UTC
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SERVER_IP}:9092
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
