@@ -8,7 +8,7 @@ spring:
       write-dates-as-timestamps: false
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/incident_db
+    url: jdbc:postgresql://${SERVER_IP}:5432/incident_db
     username: postgres
     password: secret
     hikari:
@@ -20,7 +20,7 @@ spring:
     show-sql: false
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SERVER_IP}:9092
     consumer:
       group-id: context-group
       auto-offset-reset: earliest
