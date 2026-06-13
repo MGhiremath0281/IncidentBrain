@@ -54,7 +54,7 @@ services:
   testing-service:
     build:
       context: ../microservices/testing-service
-      dockerfile: Dockerfile
+      dockerfile: ../microservices/testing-service/Dockerfile
     container_name: testing-service
     ports:
       - "8084:8084"

@@ -16,29 +16,33 @@ spring:
       hibernate:
         format_sql: true
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus,health,info
+
+  endpoint:
+    health:
+      show-details: always
+
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+  tracing:
+    sampling:
+      probability: 1.0
+
 logging:
+  pattern:
+    level: "%5p [traceId=%X{traceId},spanId=%X{spanId}]"
+
   level:
     root: INFO
-
-    # Spring Security
-    org.springframework.security: TRACE
-    org.springframework.security.web: TRACE
-    org.springframework.security.authentication: TRACE
-    org.springframework.security.authorization: TRACE
-
-    # Spring MVC
-    org.springframework.web: DEBUG
-    org.springframework.web.servlet: DEBUG
-
-    # Auth Service
-    com.incidentbbrain.authservice: TRACE
-
-    # JWT (if using jjwt)
-    io.jsonwebtoken: DEBUG
-
-    # Hibernate
-    org.hibernate.SQL: DEBUG
-    org.hibernate.orm.jdbc.bind: TRACE
+    com.incidentbbrain.alertservice: INFO
+    org.springframework.web: INFO
 
 server:
   port: 8090

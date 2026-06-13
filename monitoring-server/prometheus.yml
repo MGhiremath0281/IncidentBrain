@@ -1,0 +1,38 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'api-gateway'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['100.95.1.86:8080']
+
+  - job_name: 'alert-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['100.95.1.86:8081']
+
+  - job_name: 'correlation-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['100.95.1.86:8082']
+
+  - job_name: 'context-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['100.95.1.86:8083']
+
+  - job_name: 'ai-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['100.95.1.86:8087']
+
+  - job_name: 'jira-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['100.95.1.86:8089']
+
+  - job_name: 'auth-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['100.95.1.86:8090']

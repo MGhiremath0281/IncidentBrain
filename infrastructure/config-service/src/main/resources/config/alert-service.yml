@@ -52,8 +52,14 @@ management:
     export:
       prometheus:
         enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
 
 logging:
+  pattern:
+    level: "%5p [traceId=%X{traceId},spanId=%X{spanId}]"
+
   level:
     root: INFO
     com.incidentbbrain.alertservice: INFO

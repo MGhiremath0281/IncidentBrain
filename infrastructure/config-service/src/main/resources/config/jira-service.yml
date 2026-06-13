@@ -32,3 +32,31 @@ spring:
 
 encryption:
   master-key: ${ENCRYPTION_MASTER_KEY}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus,health,info
+
+  endpoint:
+    health:
+      show-details: always
+
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+  tracing:
+    sampling:
+      probability: 1.0
+
+logging:
+  pattern:
+    level: "%5p [traceId=%X{traceId},spanId=%X{spanId}]"
+
+  level:
+    root: INFO
+    com.incidentbbrain.alertservice: INFO
+    org.springframework.web: INFO

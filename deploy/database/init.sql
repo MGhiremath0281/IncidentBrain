@@ -3,3 +3,7 @@ CREATE DATABASE correlation_db;
 CREATE DATABASE incidentbrain;
 CREATE DATABASE jira_db;
 CREATE DATABASE aiservice_db;
+CREATE DATABASE auth_db;
+
+
+
