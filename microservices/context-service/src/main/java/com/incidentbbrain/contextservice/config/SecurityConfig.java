@@ -1,15 +1,4 @@
-git add infrastructure/auth-service/src/main/java/com/incidentbbrain/authservice/config/SecurityConfig.java
-
-        git add microservices/alertservice/src/main/java/com/incidentbbrain/alertservice/config/SecurityConfig.java
-        git add microservices/alertservice/src/main/java/com/incidentbbrain/alertservice/config/GatewayAuthFilter.java
-
-        git add microservices/context-service/src/main/java/com/incidentbbrain/contextservice/config/SecurityConfig.java
-        git add microservices/context-service/src/main/java/com/incidentbbrain/contextservice/config/GatewayAuthFilter.java
-
-        git add microservices/jira-service/src/main/java/com/incidentbbrain/jiraservice/config/SecurityConfig.java
-        git add microservices/jira-service/src/main/java/com/incidentbbrain/jiraservice/config/GatewayAuthFilter.java
-
-        git commit -m "fix: expose actuator endpoints for Prometheus scraping"package com.incidentbbrain.contextservice.config;
+package com.incidentbbrain.contextservice.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
