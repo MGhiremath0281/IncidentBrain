@@ -22,6 +22,7 @@ public class JiraOrchestrator {
 
     private final JiraIncidentRepository repository;
     private final JiraClient jiraClient;
+    private final RateLimiterService rateLimiterService; // Swapped bucket for your service
 
     @Value("${jira.project-key:KAN}")
     private String projectKey;
@@ -42,7 +43,6 @@ public class JiraOrchestrator {
 
         log.info("Mapping incident to Jira request for project: {}", projectKey);
 
-        // Map Event to Jira Request
         JiraIssueRequest request = JiraIssueRequest.builder()
                 .fields(JiraIssueRequest.Fields.builder()
                         .project(JiraIssueRequest.Project.builder().key(projectKey).build())
@@ -54,6 +54,13 @@ public class JiraOrchestrator {
                 .build();
 
         try {
+            if (!rateLimiterService.allowRequest()) {
+                log.warn(
+                        "Jira rate limit exceeded for incident {}",
+                        event.getId());
+                return "RATE_LIMITED";
+            }
+
             String jiraKey = jiraClient.postIssue(request);
             log.info("Successfully created Jira Ticket: {}", jiraKey);
 

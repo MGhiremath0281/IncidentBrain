@@ -17,6 +17,11 @@ spring:
       group-id: jira-orchestrator-group
       auto-offset-reset: earliest
 
+  data:
+    redis:
+      host: ${SERVER_IP}
+      port: 6379
+
   cloud:
     eureka:
       client:
