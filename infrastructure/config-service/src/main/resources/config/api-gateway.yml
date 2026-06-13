@@ -54,15 +54,29 @@ eureka:
     prefer-ip-address: true
 
 management:
-  endpoint:
-    gateway:
-      enabled: true
   endpoints:
     web:
       exposure:
-        include: "gateway,health,info,prometheus"
+        include: prometheus,health,info
+
+  endpoint:
+    health:
+      show-details: always
+
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+  tracing:
+    sampling:
+      probability: 1.0
 
 logging:
+  pattern:
+    level: "%5p [traceId=%X{traceId},spanId=%X{spanId}]"
+
   level:
-    org.springframework.cloud.loadbalancer: DEBUG
-    org.springframework.cloud.gateway.filter.LoadBalancerClientFilter: TRACE
+    root: INFO
+    com.incidentbbrain.alertservice: INFO
+    org.springframework.web: INFO
