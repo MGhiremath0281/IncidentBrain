@@ -1,3 +1,5 @@
+version: '3.9'
+
 services:
 
   zookeeper:
@@ -5,6 +7,8 @@ services:
     container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
@@ -15,6 +19,8 @@ services:
       - ES_JAVA_OPTS=-Xms1g -Xmx1g
     ports:
       - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
@@ -54,7 +60,7 @@ services:
   testing-service:
     build:
       context: ../microservices/testing-service
-      dockerfile: ../microservices/testing-service/Dockerfile
+      dockerfile: Dockerfile
     container_name: testing-service
     ports:
       - "8084:8084"
@@ -62,6 +68,16 @@ services:
       logstash:
         condition: service_healthy
     restart: unless-stopped
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "9090:8080"
+    restart: unless-stopped
+    environment:
+      KAFKA_CLUSTERS_0_NAME: DevSync
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: 100.85.231.85:9092
 
 volumes:
   esdata:
